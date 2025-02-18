@@ -19,9 +19,9 @@ description = "An integration package connecting Pinecone and LangChain"
 readme = "README.md"
 
 [project.urls]
-"Source Code" = "https://github.com/langchain-ai/langchain/tree/master/libs/partners/pinecone"
+"Source Code" = "https://github.com/langchain-ai/langchain-pinecone/tree/main/libs/pinecone"
 "Release Notes" = "https://github.com/langchain-ai/langchain/releases?q=tag%3A%22langchain-pinecone%3D%3D0%22&expanded=true"
-repository = "https://github.com/langchain-ai/langchain"
+repository = "https://github.com/langchain-ai/langchain-pinecone"
 
 [dependency-groups]
 test = [
