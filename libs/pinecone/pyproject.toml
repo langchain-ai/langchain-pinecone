@@ -32,17 +32,12 @@ test = [
     "pytest-watcher<1.0.0,>=0.3.4",
     "pytest-asyncio<1,>=0.25.0",
     "pytest-socket<1.0.0,>=0.7.0",
-    "langchain-core",
 ]
 codespell = ["codespell<3.0.0,>=2.2.0"]
-test_integration = ["langchain-openai"]
+test_integration = ["langchain-openai<0.4,>=0.3.6"]
 lint = ["ruff<1.0,>=0.5"]
 dev = ["langchain-core"]
-typing = ["mypy<2.0,>=1.10", "simsimd<6.0.0,>=5.0.0", "langchain-core"]
-
-[tool.uv.sources]
-langchain-core = { path = "../../core", editable = true }
-langchain-openai = { path = "../openai", editable = true }
+typing = ["mypy<2.0,>=1.10", "simsimd<6.0.0,>=5.0.0"]
 
 [tool.mypy]
 disallow_untyped_defs = "True"
