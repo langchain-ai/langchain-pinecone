@@ -132,7 +132,15 @@ jobs:
         #   sometimes a delay in availability on test pypi
         run: |
           uv venv
-          VIRTUAL_ENV=.venv uv pip install dist/*.whl
+          VIRTUAL_ENV=.venv uv pip install \
+            --extra-index-url https://test.pypi.org/simple/ \
+            "$PKG_NAME==$VERSION" || \
+          ( \
+            sleep 5 && \
+            VIRTUAL_ENV=.venv uv pip install \
+              --extra-index-url https://test.pypi.org/simple/ \
+              "$PKG_NAME==$VERSION" \
+          )
 
           # Replace all dashes in the package name with underscores,
           # since that's how Python imports packages with dashes in the name.
