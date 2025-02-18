@@ -1,6 +1,8 @@
+from collections import defaultdict
 import sys
 
 import tomllib
+from packaging.requirements import Requirement
 from packaging.version import parse as parse_version
 import re
 
@@ -35,7 +37,10 @@ def get_min_version_from_toml(toml_path: str):
         toml_data = tomllib.load(file)
 
     # Get the dependencies from tool.poetry.dependencies
-    dependencies = toml_data["tool"]["poetry"]["dependencies"]
+    dependencies = defaultdict(list)
+    for dep in toml_data["project"]["dependencies"]:
+        requirement = Requirement(dep)
+        dependencies[requirement.name].append(requirement)
 
     # Initialize a dictionary to store the minimum versions
     min_versions = {}
@@ -44,8 +49,10 @@ def get_min_version_from_toml(toml_path: str):
     for lib in MIN_VERSION_LIBS:
         # Check if the lib is present in the dependencies
         if lib in dependencies:
-            # Get the version string
-            version_string = dependencies[lib]
+            requirements = dependencies[lib]
+            for requirement in requirements:
+                # Get the version string
+                version_string = str(requirement.specifier)
 
             # Use parse_version to get the minimum supported version from version_string
             min_version = get_min_version(version_string)
