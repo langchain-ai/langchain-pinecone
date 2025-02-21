@@ -43,6 +43,13 @@ class PineconeVectorStore(VectorStore):
             pip install -qU langchain-pinecone
             export PINECONE_API_KEY = "your-pinecone-api-key"
 
+        Install ``langchain-pinecone[grpc]`` to use the Pinecone GRPC endpoint
+
+        .. code-block:: bash
+
+            pip install -qU langchain-pinecone[grpc]
+            export PINECONE_API_KEY = "your-pinecone-api-key"
+
     Key init args — indexing params:
         embedding: Embeddings
             Embedding function to use.
@@ -167,6 +174,19 @@ class PineconeVectorStore(VectorStore):
 
             [Document(metadata={'bar': 'baz'}, page_content='thud')]
 
+    Use GRPC endpoint:
+        .. code-block:: python
+
+            vector_store = PineconeVectorStore(index, embeddings=OpenAIEmbeddings(), use_grpc=True)
+
+    Use GRPC Index:
+
+        .. code-block:: python
+
+            pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
+            index = pc.GRPCIndex(index_name)
+            vector_store = PineconeVectorStore(index, embeddings=OpenAIEmbeddings())
+
     """  # noqa: E501
 
     def __init__(
@@ -183,6 +203,7 @@ class PineconeVectorStore(VectorStore):
         *,
         pinecone_api_key: Optional[str] = None,
         index_name: Optional[str] = None,
+        use_grpc: Optional[bool] = None,
     ):
         if embedding is None:
             raise ValueError("Embedding must be provided")
@@ -216,7 +237,24 @@ class PineconeVectorStore(VectorStore):
                 )
 
             # needs
-            client = PineconeClient(api_key=_pinecone_api_key, source_tag="langchain")
+            if use_grpc:
+                try:
+                    from pinecone.grpc import PineconeGRPC as PineconeGRPCClient
+                except ModuleNotFoundError:
+                    raise ImportError(
+                        "Install grpc extras to use the Pinecone GRPC client"
+                        "You can install it with: "
+                        "`pip install langchain-pinecone[grpc]`"
+                    )
+                else:
+                    client = PineconeGRPCClient(
+                        api_key=_pinecone_api_key, source_tag="langchain"
+                    )
+            else:
+                client = PineconeClient(
+                    api_key=_pinecone_api_key, source_tag="langchain"
+                )
+
             self._index = client.Index(_index_name)
 
     @property
@@ -290,7 +328,7 @@ class PineconeVectorStore(VectorStore):
                     )
                     for batch_vector_tuples in batch_iterate(batch_size, vector_tuples)
                 ]
-                [res.get() for res in async_res]
+                # [res.get() for res in async_res]
             else:
                 self._index.upsert(
                     vectors=vector_tuples,
