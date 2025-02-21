@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 import pinecone  # type: ignore
+import pinecone.grpc  # type: ignore
 import pytest  # type: ignore[import-not-found]
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings  # type: ignore[import-not-found]
@@ -21,15 +22,14 @@ DIMENSION = 1536  # dimension of the embeddings
 DEFAULT_SLEEP = 20
 
 
+@pytest.mark.parametrize("client_cls", [pinecone.Pinecone, pinecone.grpc.PineconeGRPC])
 class TestPinecone(VectorStoreIntegrationTests):
-    index: "pinecone.Index"
-    pc: "pinecone.Pinecone"
+    index: "pinecone.Index | pinecone.grpc.GRPCIndex"
+    pc: "pinecone.Pinecone | pinecone.grpc.PineconeGRPC"
 
     @classmethod
-    def setup_class(self) -> None:
-        import pinecone
-
-        client = pinecone.Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+    def setup_class(self, client_cls) -> None:
+        client = client_cls(api_key=os.environ["PINECONE_API_KEY"])
         index_list = client.list_indexes()
         if INDEX_NAME in [
             i["name"] for i in index_list
