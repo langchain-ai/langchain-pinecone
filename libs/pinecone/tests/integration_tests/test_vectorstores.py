@@ -314,7 +314,6 @@ class TestPinecone(VectorStoreIntegrationTests):
                 embedding=embedding_openai,
                 index_name=INDEX_NAME,
                 namespace=NAMESPACE_NAME,
-                async_req=True,
             )
 
     @pytest.mark.usefixtures("mock_pool_not_supported")
@@ -326,5 +325,4 @@ class TestPinecone(VectorStoreIntegrationTests):
             embedding=embedding_openai,
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
-            async_req=False,
         )

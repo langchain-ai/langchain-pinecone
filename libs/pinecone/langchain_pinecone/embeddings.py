@@ -1,10 +1,13 @@
 import logging
 from typing import Any, Dict, Iterable, List, Optional
 
-import aiohttp
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import secret_from_env
 from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
+from pinecone import (
+    PineconeAsyncio as PineconeAsyncioClient,  # type: ignore[import-untyped]
+)
+from pinecone.data.features.inference.inference import EmbeddingsList
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -33,7 +36,7 @@ class PineconeEmbeddings(BaseModel, Embeddings):
 
     # Clients
     _client: PineconeClient = PrivateAttr(default=None)
-    _async_client: Optional[aiohttp.ClientSession] = PrivateAttr(default=None)
+    _async_client: Optional[PineconeAsyncioClient] = PrivateAttr(default=None)
     model: str
     """Model to use for example 'multilingual-e5-large'."""
     # Config
@@ -66,15 +69,11 @@ class PineconeEmbeddings(BaseModel, Embeddings):
     )
 
     @property
-    def async_client(self) -> aiohttp.ClientSession:
+    def async_client(self) -> PineconeAsyncioClient:
         """Lazily initialize the async client."""
         if self._async_client is None:
-            self._async_client = aiohttp.ClientSession(
-                headers={
-                    "Api-Key": self.pinecone_api_key.get_secret_value(),
-                    "Content-Type": "application/json",
-                    "X-Pinecone-API-Version": "2024-10",
-                }
+            self._async_client = PineconeAsyncioClient(
+                api_key=self.pinecone_api_key.get_secret_value(), source_tag="langchain"
             )
         return self._async_client
 
@@ -135,10 +134,10 @@ class PineconeEmbeddings(BaseModel, Embeddings):
 
         _iter = self._get_batch_iterator(texts)
         for i in _iter:
-            response = self._client.inference.embed(
+            response = self._embed_texts(
                 model=self.model,
                 parameters=self.document_params,
-                inputs=texts[i : i + self.batch_size],
+                texts=texts[i : i + self.batch_size],
             )
             embeddings.extend([r["values"] for r in response])
 
@@ -153,34 +152,36 @@ class PineconeEmbeddings(BaseModel, Embeddings):
                 parameters=self.document_params,
                 texts=texts[i : i + self.batch_size],
             )
-            embeddings.extend([r["values"] for r in response["data"]])
+            embeddings.extend([r["values"] for r in response])
         return embeddings
 
     def embed_query(self, text: str) -> List[float]:
         """Embed query text."""
-        return self._client.inference.embed(
-            model=self.model, parameters=self.query_params, inputs=[text]
+        return self._embed_texts(
+            model=self.model, parameters=self.query_params, texts=[text]
         )[0]["values"]
 
     async def aembed_query(self, text: str) -> List[float]:
         """Asynchronously embed query text."""
-        response = await self._aembed_texts(
+        embeddings = await self._aembed_texts(
             model=self.model,
             parameters=self.document_params,
             texts=[text],
         )
-        return response["data"][0]["values"]
+        return embeddings[0]["values"]
+
+    def _embed_texts(
+        self, texts: List[str], model: str, parameters: dict
+    ) -> EmbeddingsList:
+        return self._client.inference.embed(
+            model=model, inputs=texts, parameters=parameters
+        )
 
     async def _aembed_texts(
         self, texts: List[str], model: str, parameters: dict
-    ) -> Dict:
-        data = {
-            "model": model,
-            "inputs": [{"text": text} for text in texts],
-            "parameters": parameters,
-        }
-        async with self.async_client.post(
-            "https://api.pinecone.io/embed", json=data
-        ) as response:
-            response_data = await response.json(content_type=None)
-            return response_data
+    ) -> EmbeddingsList:
+        async with self.async_client as aclient:
+            embeddings: EmbeddingsList = await aclient.inference.embed(
+                model=model, inputs=texts, parameters=parameters
+            )
+            return embeddings

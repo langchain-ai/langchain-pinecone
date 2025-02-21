@@ -1,10 +1,10 @@
 from typing import Any, Type
 from unittest.mock import patch
 
-import aiohttp
 import pytest
 from langchain_core.utils import convert_to_secret_str
 from langchain_tests.unit_tests.embeddings import EmbeddingsTests
+from pinecone import PineconeAsyncio
 
 from langchain_pinecone import PineconeEmbeddings
 
@@ -72,12 +72,4 @@ class TestPineconeEmbeddingsConfig:
         # Access async_client property
         client = embeddings.async_client
         assert client is not None
-        assert isinstance(client, aiohttp.ClientSession)
-
-        # Ensure headers are set correctly
-        expected_headers = {
-            "Api-Key": API_KEY.get_secret_value(),
-            "Content-Type": "application/json",
-            "X-Pinecone-API-Version": "2024-10",
-        }
-        assert client._default_headers == expected_headers
+        assert isinstance(client, PineconeAsyncio)
