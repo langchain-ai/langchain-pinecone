@@ -21,10 +21,10 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils.iter import batch_iterate
 from langchain_core.vectorstores import VectorStore
-from pinecone import Pinecone as PineconeClient
+from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
 from pinecone import PineconeAsyncio as PineconeAsyncioClient
 from pinecone import SearchQuery, SearchRerank
-from pinecone.data.index import SearchRecordsResponse
+from pinecone.data.index import SearchRecordsResponse  # type: ignore[import-untyped]
 
 from langchain_pinecone._utilities import DistanceStrategy, maximal_marginal_relevance
 
@@ -172,6 +172,8 @@ class PineconeVectorStore(VectorStore):
             [Document(metadata={'bar': 'baz'}, page_content='thud')]
 
     """  # noqa: E501
+
+    _async_client: Optional[PineconeAsyncioClient]
 
     def __init__(
         self,
@@ -610,9 +612,8 @@ class PineconeVectorStore(VectorStore):
         self,
         query: str,
         k: int = 4,
-        *,
         filter: Optional[dict] = None,
-        namespace: Optional[str],
+        namespace: Optional[str] = None,
         **kwargs: Any,
     ) -> list[Document]:
         docs_and_scores = await self.asimilarity_search_with_score(
@@ -701,7 +702,6 @@ class PineconeVectorStore(VectorStore):
     async def amax_marginal_relevance_search_by_vector(
         self,
         embedding: List[float],
-        *,
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
@@ -790,7 +790,6 @@ class PineconeVectorStore(VectorStore):
     async def amax_marginal_relevance_search(
         self,
         query: str,
-        *,
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,

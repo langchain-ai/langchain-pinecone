@@ -7,7 +7,9 @@ from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
 from pinecone import (
     PineconeAsyncio as PineconeAsyncioClient,  # type: ignore[import-untyped]
 )
-from pinecone.data.features.inference.inference import EmbeddingsList
+from pinecone.data.features.inference.inference import (  # type: ignore[import-untyped]
+    EmbeddingsList,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,

@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from langchain_core.utils import convert_to_secret_str
 from langchain_tests.unit_tests.embeddings import EmbeddingsTests
-from pinecone import PineconeAsyncio
+from pinecone import PineconeAsyncio  # type: ignore[import-untyped]
 
 from langchain_pinecone import PineconeEmbeddings
 
