@@ -24,7 +24,7 @@ from langchain_core.vectorstores import VectorStore
 from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
 from pinecone import PineconeAsyncio as PineconeAsyncioClient
 from pinecone import SearchQuery, SearchRerank
-from pinecone.data import _Index, _IndexAsyncio
+from pinecone.data import _Index, _IndexAsyncio  # type: ignore[import-untyped]
 from pinecone.data.index import SearchRecordsResponse  # type: ignore[import-untyped]
 
 from langchain_pinecone._utilities import DistanceStrategy, maximal_marginal_relevance
