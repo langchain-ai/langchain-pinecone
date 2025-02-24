@@ -1,13 +1,13 @@
 from unittest.mock import Mock
 
 import pytest
-from pytest_mock import MockerFixture
+from pytest_mock import AsyncMockType, MockerFixture
 
 from langchain_pinecone.vectorstores import PineconeVectorStore
 
 
 @pytest.fixture
-def mock_embedding(mocker: MockerFixture):
+def mock_embedding(mocker: MockerFixture) -> AsyncMockType:
     """Fixture for mock embedding function."""
     mock_embedding = mocker.AsyncMock()
     mock_embedding.aembed_documents = mocker.AsyncMock(return_value=[[0.1, 0.2, 0.3]])
@@ -15,10 +15,10 @@ def mock_embedding(mocker: MockerFixture):
 
 
 @pytest.fixture
-def mock_async_index(mocker: MockerFixture):
+def mock_async_index(mocker: MockerFixture) -> AsyncMockType:
     """Fixture for mock async index."""
     # Import the actual _IndexAsyncio class to use as spec
-    from pinecone.data import _IndexAsyncio
+    from pinecone.data import _IndexAsyncio  # type:ignore[import-untyped]
 
     mock_async_index = mocker.AsyncMock(spec=_IndexAsyncio)
     mock_async_index.config = mocker.Mock()
@@ -30,7 +30,7 @@ def mock_async_index(mocker: MockerFixture):
 
 
 @pytest.fixture
-def mock_index(mocker: MockerFixture):
+def mock_index(mocker: MockerFixture) -> AsyncMockType:
     """Fixture for mock async index."""
     # Import the actual _IndexAsyncio class to use as spec
     from pinecone.data import _Index
@@ -65,7 +65,9 @@ def test_id_prefix() -> None:
 
 
 @pytest.mark.asyncio
-async def test_aadd_texts__calls_index_upsert(mock_embedding, mock_async_index) -> None:
+async def test_aadd_texts__calls_index_upsert(
+    mock_embedding: AsyncMockType, mock_async_index: AsyncMockType
+) -> None:
     """Test that aadd_texts properly calls the async index upsert method."""
 
     # Create vectorstore with mocked components
@@ -86,7 +88,10 @@ async def test_aadd_texts__calls_index_upsert(mock_embedding, mock_async_index) 
 
 @pytest.mark.asyncio
 async def test_initialising_with_sync_index__still_uses_async_index(
-    mocker, mock_index, mock_embedding, mock_async_index
+    mocker: MockerFixture,
+    mock_index: AsyncMockType,
+    mock_embedding: AsyncMockType,
+    mock_async_index: AsyncMockType,
 ) -> None:
     """Test that initializing with a sync index still enables async operations."""
 
@@ -117,7 +122,9 @@ async def test_initialising_with_sync_index__still_uses_async_index(
 
 @pytest.mark.asyncio
 async def test_asimilarity_search_with_score(
-    mocker, mock_async_index, mock_embedding
+    mocker: MockerFixture,
+    mock_async_index: AsyncMockType,
+    mock_embedding: AsyncMockType,
 ) -> None:
     """Test async similarity search with score functionality."""
     mock_async_index.query = mocker.AsyncMock(
@@ -150,7 +157,11 @@ async def test_asimilarity_search_with_score(
 
 
 @pytest.mark.asyncio
-async def test_adelete(mocker: MockerFixture, mock_embedding, mock_async_index) -> None:
+async def test_adelete(
+    mocker: MockerFixture,
+    mock_embedding: AsyncMockType,
+    mock_async_index: AsyncMockType,
+) -> None:
     """Test async delete functionality."""
     # Setup the async mock for delete
     mock_async_index.delete = mocker.AsyncMock(return_value=None)
