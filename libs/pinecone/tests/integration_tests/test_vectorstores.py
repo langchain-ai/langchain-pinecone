@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import uuid
@@ -104,7 +105,7 @@ class TestPinecone(VectorStoreIntegrationTests):
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
         )
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
+        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
         output = await docsearch.asimilarity_search(
             unique_id, k=1, namespace=NAMESPACE_NAME
         )
@@ -157,7 +158,7 @@ class TestPinecone(VectorStoreIntegrationTests):
             metadatas=metadatas,
             namespace=namespace,
         )
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
+        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
         output = await docsearch.asimilarity_search(needs, k=1, namespace=namespace)
 
         output[0].id = None
@@ -212,7 +213,7 @@ class TestPinecone(VectorStoreIntegrationTests):
             namespace=NAMESPACE_NAME,
         )
         print(texts)  # noqa: T201
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
+        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
         output = await docsearch.asimilarity_search_with_score(
             "foo", k=3, namespace=NAMESPACE_NAME
         )
@@ -336,7 +337,7 @@ class TestPinecone(VectorStoreIntegrationTests):
             metadatas=metadatas,
         )
         # wait for the index to be ready
-        time.sleep(DEFAULT_SLEEP)
+        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
         output = await docsearch.asimilarity_search_with_relevance_scores("foo", k=3)
         print(output)  # noqa: T201
         assert all(
