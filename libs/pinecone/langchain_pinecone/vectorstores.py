@@ -24,6 +24,7 @@ from langchain_core.vectorstores import VectorStore
 from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
 from pinecone import PineconeAsyncio as PineconeAsyncioClient
 from pinecone import SearchQuery, SearchRerank
+from pinecone.data import _Index, _IndexAsyncio
 from pinecone.data.index import SearchRecordsResponse  # type: ignore[import-untyped]
 
 from langchain_pinecone._utilities import DistanceStrategy, maximal_marginal_relevance
@@ -173,7 +174,8 @@ class PineconeVectorStore(VectorStore):
 
     """  # noqa: E501
 
-    _async_client: Optional[PineconeAsyncioClient]
+    _index: Optional[_Index] = None
+    _async_index: Optional[_IndexAsyncio] = None
 
     def __init__(
         self,
@@ -202,7 +204,12 @@ class PineconeVectorStore(VectorStore):
 
         if index:
             # supports old way of initializing externally
-            self._index = index
+            if isinstance(index, _IndexAsyncio):
+                self._async_index = index
+            else:
+                self._index = index
+            self._index_host = index.config.host
+            self._pinecone_api_key = index.config.api_key
         else:
             # all internal initialization
             _pinecone_api_key = (
@@ -221,20 +228,34 @@ class PineconeVectorStore(VectorStore):
                     "Pinecone index name must be provided in either `index_name` "
                     "or `PINECONE_INDEX_NAME` environment variable"
                 )
-            self._index_name = _index_name
+            self._pinecone_api_key = _pinecone_api_key
 
-            # needs
             client = PineconeClient(api_key=_pinecone_api_key, source_tag="langchain")
-            self._index = client.Index(_index_name)
+            self._index = client.Index(name=_index_name)
 
     @property
-    def async_client(self) -> PineconeAsyncioClient:
-        """Lazily initialize the async client."""
-        if not hasattr(self, "_async_client") or self._async_client is None:
-            self._async_client = PineconeAsyncioClient(
+    def index(self) -> _Index:
+        """Get synchronous index instance."""
+        if self._index is None:
+            if not hasattr(self, "_pinecone_api_key"):
+                raise ValueError("No Pinecone API key available")
+            client = PineconeClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
             )
-        return self._async_client
+            self._index = client.Index(host=self._index_host)
+        return self._index
+
+    @property
+    def async_index(self) -> _IndexAsyncio:
+        """Get asynchronous index instance."""
+        if self._async_index is None:
+            if not hasattr(self, "_index_host"):
+                raise ValueError("No index host available")
+            client = PineconeAsyncioClient(
+                api_key=self._pinecone_api_key, source_tag="langchain"
+            )
+            self._async_index = client.IndexAsyncio(host=self.index.config.host)
+        return self._async_index
 
     @property
     def embeddings(self) -> Optional[Embeddings]:
@@ -293,7 +314,7 @@ class PineconeVectorStore(VectorStore):
             chunk_metadatas = metadatas[i : i + embedding_chunk_size]
             embeddings = self._embedding.embed_documents(chunk_texts)
             vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
-            self._index.upsert(
+            self.index.upsert(
                 vectors=vector_tuples,
                 namespace=namespace,
                 **kwargs,
@@ -353,9 +374,7 @@ class PineconeVectorStore(VectorStore):
             embeddings = await self._embedding.aembed_documents(chunk_texts)
             vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
 
-            async with self.async_client.IndexAsyncio(
-                host=self._index.config.host
-            ) as idx:
+            async with self.async_index as idx:
                 # Split into batches and upsert asynchronously
                 tasks = []
                 for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
@@ -386,14 +405,14 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         if rerank_model and rerank_fields is not None:
-            response: SearchRecordsResponse = self._index.search(
+            response: SearchRecordsResponse = self.index.search(
                 namespace=namespace,  # type: ignore
                 query=SearchQuery(inputs={"text": query}, top_k=k),
                 rerank=SearchRerank(model=rerank_model, rank_fields=rerank_fields),
             )
         elif all([rerank_model is None, rerank_fields is None]):
             # If no rerank arguments have been passed, just ignore
-            response = self._index.search(
+            response = self.index.search(
                 namespace=namespace,  # type: ignore
                 query=SearchQuery(inputs={"text": query}, top_k=k),
             )
@@ -430,9 +449,7 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         if rerank_model and rerank_fields is not None:
-            async with self.async_client.IndexAsyncio(
-                host=self._index.config.host
-            ) as idx:
+            async with self.async_index as idx:
                 response = await idx.search(
                     namespace=namespace,  # type: ignore
                     query=SearchQuery(inputs={"text": query}, top_k=k),
@@ -440,9 +457,7 @@ class PineconeVectorStore(VectorStore):
                 )
         elif all([rerank_model is None, rerank_fields is None]):
             # If no rerank arguments have been passed, just ignore
-            async with self.async_client.IndexAsyncio(
-                host=self._index.config.host
-            ) as idx:
+            async with self.async_index as idx:
                 response = await idx.search(
                     namespace=namespace,  # type: ignore
                     query=SearchQuery(inputs={"text": query}, top_k=k),
@@ -525,7 +540,7 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
         docs = []
-        results = self._index.query(
+        results = self.index.query(
             vector=embedding,
             top_k=k,
             include_metadata=True,
@@ -560,7 +575,7 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         docs = []
-        async with self.async_client.IndexAsyncio(host=self._index.config.host) as idx:
+        async with self.async_index as idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=k,
@@ -679,8 +694,8 @@ class PineconeVectorStore(VectorStore):
         """
         if namespace is None:
             namespace = self._namespace
-        results = self._index.query(
-            vector=[embedding],
+        results = self.index.query(
+            vector=embedding,
             top_k=fetch_k,
             include_values=True,
             include_metadata=True,
@@ -731,7 +746,7 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        async with self.async_client.IndexAsyncio(host=self._index.config.host) as idx:
+        async with self.async_index as idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=fetch_k,
@@ -976,14 +991,14 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         if delete_all:
-            self._index.delete(delete_all=True, namespace=namespace, **kwargs)
+            self.index.delete(delete_all=True, namespace=namespace, **kwargs)
         elif ids is not None:
             chunk_size = 1000
             for i in range(0, len(ids), chunk_size):
                 chunk = ids[i : i + chunk_size]
-                self._index.delete(ids=chunk, namespace=namespace, **kwargs)
+                self.index.delete(ids=chunk, namespace=namespace, **kwargs)
         elif filter is not None:
-            self._index.delete(filter=filter, namespace=namespace, **kwargs)
+            self.index.delete(filter=filter, namespace=namespace, **kwargs)
         else:
             raise ValueError("Either ids, delete_all, or filter must be provided.")
 
@@ -1001,24 +1016,18 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         if delete_all:
-            async with self.async_client.IndexAsyncio(
-                host=self._index.config.host
-            ) as idx:
+            async with self.async_index as idx:
                 await idx.delete(delete_all=True, namespace=namespace, **kwargs)
         elif ids is not None:
             chunk_size = 1000
-            async with self.async_client.IndexAsyncio(
-                host=self._index.config.host
-            ) as idx:
+            async with self.async_index as idx:
                 tasks = []
                 for i in range(0, len(ids), chunk_size):
                     chunk = ids[i : i + chunk_size]
                     tasks.append(idx.delete(ids=chunk, namespace=namespace, **kwargs))
                 await asyncio.gather(*tasks)
         elif filter is not None:
-            async with self.async_client.IndexAsyncio(
-                host=self._index.config.host
-            ) as idx:
+            async with self.async_index as idx:
                 await idx.delete(filter=filter, namespace=namespace, **kwargs)
         else:
             raise ValueError("Either ids, delete_all, or filter must be provided.")
