@@ -116,17 +116,21 @@ async def test_initialising_with_sync_index__still_uses_async_index(
 
 
 @pytest.mark.asyncio
-async def test_asimilarity_search_with_score(mock_async_index, mock_embedding) -> None:
+async def test_asimilarity_search_with_score(
+    mocker, mock_async_index, mock_embedding
+) -> None:
     """Test async similarity search with score functionality."""
-    mock_async_index.query.return_value = {
-        "matches": [
-            {
-                "metadata": {"text": "test doc", "other": "metadata"},
-                "score": 0.8,
-                "id": "test-id",
-            }
-        ]
-    }
+    mock_async_index.query = mocker.AsyncMock(
+        return_value={
+            "matches": [
+                {
+                    "metadata": {"text": "test doc", "other": "metadata"},
+                    "score": 0.8,
+                    "id": "test-id",
+                }
+            ]
+        }
+    )
 
     # Create vectorstore
     vectorstore = PineconeVectorStore(
@@ -146,8 +150,10 @@ async def test_asimilarity_search_with_score(mock_async_index, mock_embedding) -
 
 
 @pytest.mark.asyncio
-async def test_adelete(mock_embedding, mock_async_index) -> None:
+async def test_adelete(mocker: MockerFixture, mock_embedding, mock_async_index) -> None:
     """Test async delete functionality."""
+    # Setup the async mock for delete
+    mock_async_index.delete = mocker.AsyncMock(return_value=None)
 
     # Create vectorstore
     vectorstore = PineconeVectorStore(
