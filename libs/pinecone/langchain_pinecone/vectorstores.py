@@ -23,9 +23,7 @@ from langchain_core.utils.iter import batch_iterate
 from langchain_core.vectorstores import VectorStore
 from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
 from pinecone import PineconeAsyncio as PineconeAsyncioClient
-from pinecone import SearchQuery, SearchRerank
 from pinecone.data import _Index, _IndexAsyncio  # type: ignore[import-untyped]
-from pinecone.data.index import SearchRecordsResponse  # type: ignore[import-untyped]
 
 from langchain_pinecone._utilities import DistanceStrategy, maximal_marginal_relevance
 
@@ -389,96 +387,6 @@ class PineconeVectorStore(VectorStore):
                 await asyncio.gather(*tasks)
 
         return ids
-
-    def search(
-        self,
-        query: str,
-        search_type: str,
-        *,
-        k: int = 4,
-        namespace: Optional[str] = None,
-        rerank_model: Optional[str] = None,
-        rerank_fields: Optional[list[str]] = None,
-        **kwargs: Any,
-    ) -> list[Document]:
-        if namespace is None:
-            namespace = self._namespace
-
-        if rerank_model and rerank_fields is not None:
-            response: SearchRecordsResponse = self.index.search(
-                namespace=namespace,  # type: ignore
-                query=SearchQuery(inputs={"text": query}, top_k=k),
-                rerank=SearchRerank(model=rerank_model, rank_fields=rerank_fields),
-            )
-        elif all([rerank_model is None, rerank_fields is None]):
-            # If no rerank arguments have been passed, just ignore
-            response = self.index.search(
-                namespace=namespace,  # type: ignore
-                query=SearchQuery(inputs={"text": query}, top_k=k),
-            )
-        else:
-            # One of the `rerank_model` or `rerank_fields` has been passed, but not both
-            raise ValueError(
-                "You must provide both `rerank_model` and `rerank_fields` arguments for reranking"
-            )
-
-        docs = []
-        hits = response["result"]["hits"]
-
-        for hit in hits:
-            fields = hit["fields"]
-
-            if self._text_key in fields:
-                text = fields.pop(self._text_key)
-                docs.append(Document(page_content=text))
-
-        return docs
-
-    async def asearch(
-        self,
-        query: str,
-        search_type: str,
-        *,
-        k: int = 4,
-        namespace: Optional[str] = None,
-        rerank_model: Optional[str] = None,
-        rerank_fields: Optional[list[str]] = None,
-        **kwargs: Any,
-    ) -> list[Document]:
-        if namespace is None:
-            namespace = self._namespace
-
-        if rerank_model and rerank_fields is not None:
-            async with self.async_index as idx:
-                response = await idx.search(
-                    namespace=namespace,  # type: ignore
-                    query=SearchQuery(inputs={"text": query}, top_k=k),
-                    rerank=SearchRerank(model=rerank_model, rank_fields=rerank_fields),
-                )
-        elif all([rerank_model is None, rerank_fields is None]):
-            # If no rerank arguments have been passed, just ignore
-            async with self.async_index as idx:
-                response = await idx.search(
-                    namespace=namespace,  # type: ignore
-                    query=SearchQuery(inputs={"text": query}, top_k=k),
-                )
-        else:
-            # One of the `rerank_model` or `rerank_fields` has been passed, but not both
-            raise ValueError(
-                "You must provide both `rerank_model` and `rerank_fields` arguments for reranking"
-            )
-
-        docs = []
-        hits = response["result"]["hits"]
-
-        for hit in hits:
-            fields = hit["fields"]
-
-            if self._text_key in fields:
-                text = fields.pop(self._text_key)
-                docs.append(Document(page_content=text))
-
-        return docs
 
     def similarity_search_with_score(
         self,
