@@ -66,7 +66,12 @@ class TestPineconeEmbeddingsConfig:
             ),
         ],
     )
-    def test_default_config(self, model_name, expected_config, embeddings_cls) -> None:
+    def test_default_config(
+        self,
+        model_name: str,
+        expected_config: dict[str, Any],
+        embeddings_cls: PineconeEmbeddings,
+    ) -> None:
         """Test default configuration is set correctly."""
         embeddings = embeddings_cls(model=model_name, pinecone_api_key=API_KEY)  # type: ignore
         assert embeddings.batch_size == expected_config["batch_size"]

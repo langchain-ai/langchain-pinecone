@@ -58,7 +58,7 @@ def test_embed_query(embd_client: PineconeEmbeddings) -> None:
     assert len(out) == DIMENSION
 
 
-def test_sparse_embed_query(sparse_embd_client: PineconeSparseEmbeddings):
+def test_sparse_embed_query(sparse_embd_client: PineconeSparseEmbeddings) -> None:
     out = sparse_embd_client.embed_query("Hello, world!")
     assert isinstance(out, SparseValues)
     assert len(out.indices) == 2
