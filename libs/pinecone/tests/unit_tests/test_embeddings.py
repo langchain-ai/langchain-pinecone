@@ -7,9 +7,11 @@ from langchain_tests.unit_tests.embeddings import EmbeddingsTests
 from pinecone import PineconeAsyncio  # type: ignore[import-untyped]
 
 from langchain_pinecone import PineconeEmbeddings
+from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 
 API_KEY = convert_to_secret_str("NOT_A_VALID_KEY")
 MODEL_NAME = "multilingual-e5-large"
+SPARSE_MODEL_NAME = "pinecone-sparse-english-v0"
 
 
 @pytest.fixture(autouse=True)
@@ -39,16 +41,38 @@ class TestPineconeEmbeddingsStandard(EmbeddingsTests):
 class TestPineconeEmbeddingsConfig:
     """Additional configuration tests for PineconeEmbeddings."""
 
-    def test_default_config(self) -> None:
+    @pytest.mark.parametrize(
+        "model_name,expected_config,embeddings_cls",
+        [
+            (
+                MODEL_NAME,
+                {
+                    "batch_size": 96,
+                    "query_params": {"input_type": "query", "truncation": "END"},
+                    "document_params": {"input_type": "passage", "truncation": "END"},
+                    "dimension": 1024,
+                },
+                PineconeEmbeddings,
+            ),
+            (
+                SPARSE_MODEL_NAME,
+                {
+                    "batch_size": 96,
+                    "query_params": {"input_type": "query", "truncation": "END"},
+                    "document_params": {"input_type": "passage", "truncation": "END"},
+                    "dimension": None,
+                },
+                PineconeSparseEmbeddings,
+            ),
+        ],
+    )
+    def test_default_config(self, model_name, expected_config, embeddings_cls) -> None:
         """Test default configuration is set correctly."""
-        embeddings = PineconeEmbeddings(model=MODEL_NAME, pinecone_api_key=API_KEY)  # type: ignore
-        assert embeddings.batch_size == 96
-        assert embeddings.query_params == {"input_type": "query", "truncation": "END"}
-        assert embeddings.document_params == {
-            "input_type": "passage",
-            "truncation": "END",
-        }
-        assert embeddings.dimension == 1024
+        embeddings = embeddings_cls(model=model_name, pinecone_api_key=API_KEY)  # type: ignore
+        assert embeddings.batch_size == expected_config["batch_size"]
+        assert embeddings.query_params == expected_config["query_params"]
+        assert embeddings.document_params == expected_config["document_params"]
+        assert embeddings.dimension == expected_config["dimension"]
 
     def test_custom_config(self) -> None:
         """Test custom configuration overrides defaults."""

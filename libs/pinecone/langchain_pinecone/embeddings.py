@@ -7,6 +7,7 @@ from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
 from pinecone import (
     PineconeAsyncio as PineconeAsyncioClient,  # type: ignore[import-untyped]
 )
+from pinecone import SparseValues
 from pinecone.data.features.inference.inference import (  # type: ignore[import-untyped]
     EmbeddingsList,
 )
@@ -89,7 +90,7 @@ class PineconeEmbeddings(BaseModel, Embeddings):
                 "query_params": {"input_type": "query", "truncation": "END"},
                 "document_params": {"input_type": "passage", "truncation": "END"},
                 "dimension": 1024,
-            }
+            },
         }
         model = values.get("model")
         if model in default_config_map:
@@ -109,7 +110,7 @@ class PineconeEmbeddings(BaseModel, Embeddings):
         # Ensure async_client is lazily initialized
         return self
 
-    def _get_batch_iterator(self, texts: List[str]) -> Iterable:
+    def _get_batch_iterator(self, texts: List[str]) -> tuple[Iterable, int]:
         if self.batch_size is None:
             batch_size = DEFAULT_BATCH_SIZE
         else:
@@ -128,18 +129,18 @@ class PineconeEmbeddings(BaseModel, Embeddings):
         else:
             _iter = range(0, len(texts), batch_size)
 
-        return _iter
+        return _iter, batch_size
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Embed search docs."""
         embeddings: List[List[float]] = []
 
-        _iter = self._get_batch_iterator(texts)
+        _iter, batch_size = self._get_batch_iterator(texts)
         for i in _iter:
             response = self._embed_texts(
                 model=self.model,
                 parameters=self.document_params,
-                texts=texts[i : i + self.batch_size],
+                texts=texts[i : i + batch_size],
             )
             embeddings.extend([r["values"] for r in response])
 
@@ -147,12 +148,12 @@ class PineconeEmbeddings(BaseModel, Embeddings):
 
     async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
         embeddings: List[List[float]] = []
-        _iter = self._get_batch_iterator(texts)
+        _iter, batch_size = self._get_batch_iterator(texts)
         for i in _iter:
             response = await self._aembed_texts(
                 model=self.model,
                 parameters=self.document_params,
-                texts=texts[i : i + self.batch_size],
+                texts=texts[i : i + batch_size],
             )
             embeddings.extend([r["values"] for r in response])
         return embeddings
@@ -187,3 +188,90 @@ class PineconeEmbeddings(BaseModel, Embeddings):
                 model=model, inputs=texts, parameters=parameters
             )
             return embeddings
+
+
+class PineconeSparseEmbeddings(PineconeEmbeddings):
+    """PineconeSparseEmbeddings embedding model.
+
+    Example:
+        .. code-block:: python
+
+            from langchain_pinecone import PineconeSparseEmbeddings
+
+            model = PineconeSparseEmbeddings(model="pinecone-sparse-english-v0")
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_default_config(cls, values: dict) -> Any:
+        """Set default configuration based on model."""
+        default_config_map = {
+            "pinecone-sparse-english-v0": {
+                "batch_size": 96,
+                "query_params": {"input_type": "query", "truncation": "END"},
+                "document_params": {"input_type": "passage", "truncation": "END"},
+                "dimension": None,
+            },
+        }
+        model = values.get("model")
+        if model in default_config_map:
+            config = default_config_map[model]
+            for key, value in config.items():
+                if key not in values:
+                    values[key] = value
+        return values
+
+    def embed_documents(self, texts: List[str]) -> List[SparseValues]:
+        """Embed search docs with sparse embeddings."""
+        embeddings: List[SparseValues] = []
+
+        _iter, batch_size = self._get_batch_iterator(texts)
+        for i in _iter:
+            response = self._embed_texts(
+                model=self.model,
+                parameters=self.document_params,
+                texts=texts[i : i + batch_size],
+            )
+            for r in response:
+                embeddings.append(
+                    SparseValues(indices=r["sparse_indices"], values=r["sparse_values"])
+                )
+
+        return embeddings
+
+    async def aembed_documents(self, texts: List[str]) -> List[SparseValues]:
+        """Asynchronously embed search docs with sparse embeddings."""
+        embeddings: List[SparseValues] = []
+        _iter, batch_size = self._get_batch_iterator(texts)
+        for i in _iter:
+            response = await self._aembed_texts(
+                model=self.model,
+                parameters=self.document_params,
+                texts=texts[i : i + batch_size],
+            )
+            for r in response:
+                embeddings.append(
+                    SparseValues(indices=r["sparse_indices"], values=r["sparse_values"])
+                )
+        return embeddings
+
+    def embed_query(self, text: str) -> SparseValues:
+        """Embed query text with sparse embeddings."""
+        response = self._embed_texts(
+            model=self.model, parameters=self.query_params, texts=[text]
+        )[0]
+        return SparseValues(
+            indices=response["sparse_indices"], values=response["sparse_values"]
+        )
+
+    async def aembed_query(self, text: str) -> SparseValues:
+        """Asynchronously embed query text with sparse embeddings."""
+        embeddings = await self._aembed_texts(
+            model=self.model,
+            parameters=self.query_params,
+            texts=[text],
+        )
+        response = embeddings[0]
+        return SparseValues(
+            indices=response["sparse_indices"], values=response["sparse_values"]
+        )
