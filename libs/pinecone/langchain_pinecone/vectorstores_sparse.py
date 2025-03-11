@@ -13,6 +13,7 @@ from typing import (
     TypeVar,
 )
 
+import numpy as np
 from langchain_core.documents import Document
 from langchain_core.utils import batch_iterate
 from langchain_core.vectorstores import VectorStore
@@ -456,7 +457,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         Returns:
             List of Documents selected by maximal marginal relevance.
         """
-        embedding = self._embedding.embed_query(query)
+        embedding = self.embeddings.embed_query(query)
         return self.max_marginal_relevance_search_by_vector(
             embedding, k, fetch_k, lambda_mult, filter, namespace
         )
@@ -471,7 +472,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         namespace: Optional[str] = None,
         **kwargs: Any,
     ) -> list[Document]:
-        embedding = await self._embedding.aembed_query(query)
+        embedding = await self.embeddings.aembed_query(query)
         return await self.amax_marginal_relevance_search_by_vector(
             embedding,
             k=k,
@@ -480,155 +481,6 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             filter=filter,
             namespace=namespace,
         )
-
-    @classmethod
-    def get_pinecone_index(
-        cls,
-        index_name: Optional[str],
-        pool_threads: int = 4,
-        *,
-        pinecone_api_key: Optional[str] = None,
-    ) -> Index:
-        """Return a Pinecone Index instance.
-
-        Args:
-            index_name: Name of the index to use.
-            pool_threads: Number of threads to use for index upsert.
-            pinecone_api_key: The api_key of Pinecone.
-        Returns:
-            Pinecone Index instance."""
-        _pinecone_api_key = pinecone_api_key or os.environ.get("PINECONE_API_KEY") or ""
-        client = PineconeClient(
-            api_key=_pinecone_api_key, pool_threads=pool_threads, source_tag="langchain"
-        )
-        indexes = client.list_indexes()
-        index_names = [i.name for i in indexes.index_list["indexes"]]
-
-        if index_name in index_names:
-            index = client.Index(index_name)
-        elif len(index_names) == 0:
-            raise ValueError(
-                "No active indexes found in your Pinecone project, "
-                "are you sure you're using the right Pinecone API key and Environment? "
-                "Please double check your Pinecone dashboard."
-            )
-        else:
-            raise ValueError(
-                f"Index '{index_name}' not found in your Pinecone project. "
-                f"Did you mean one of the following indexes: {', '.join(index_names)}"
-            )
-        return index
-
-    @classmethod
-    def from_texts(
-        cls,
-        texts: List[str],
-        embedding: Embeddings,
-        metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
-        batch_size: int = 32,
-        text_key: str = "text",
-        namespace: Optional[str] = None,
-        index_name: Optional[str] = None,
-        upsert_kwargs: Optional[dict] = None,
-        pool_threads: int = 4,
-        embeddings_chunk_size: int = 1000,
-        *,
-        id_prefix: Optional[str] = None,
-        **kwargs: Any,
-    ) -> PineconeVectorStore:
-        """Construct Pinecone wrapper from raw documents.
-
-        This is a user-friendly interface that:
-            1. Embeds documents.
-            2. Adds the documents to a provided Pinecone index
-
-        This is intended to be a quick way to get started.
-
-        The `pool_threads` affects the speed of the upsert operations.
-
-        Setup: set the `PINECONE_API_KEY` environment variable to your Pinecone API key.
-
-        Example:
-            .. code-block:: python
-
-                from langchain_pinecone import PineconeVectorStore, PineconeEmbeddings
-
-                embeddings = PineconeEmbeddings(model="multilingual-e5-large")
-
-                index_name = "my-index"
-                vectorstore = PineconeVectorStore.from_texts(
-                    texts,
-                    index_name=index_name,
-                    embedding=embedding,
-                    namespace=namespace,
-                )
-        """
-        pinecone_index = cls.get_pinecone_index(index_name, pool_threads)
-        pinecone = cls(pinecone_index, embedding, text_key, namespace, **kwargs)
-
-        pinecone.add_texts(
-            texts,
-            metadatas=metadatas,
-            ids=ids,
-            namespace=namespace,
-            batch_size=batch_size,
-            embedding_chunk_size=embeddings_chunk_size,
-            id_prefix=id_prefix,
-            **(upsert_kwargs or {}),
-        )
-        return pinecone
-
-    @classmethod
-    async def afrom_texts(
-        cls: type[PineconeVectorStore],
-        texts: List[str],
-        embedding: Embeddings,
-        metadatas: Optional[List[dict]] = None,
-        ids: Optional[List[str]] = None,
-        batch_size: int = 32,
-        text_key: str = "text",
-        namespace: Optional[str] = None,
-        index_name: Optional[str] = None,
-        upsert_kwargs: Optional[dict] = None,
-        embeddings_chunk_size: int = 1000,
-        *,
-        id_prefix: Optional[str] = None,
-        **kwargs: Any,
-    ) -> PineconeVectorStore:
-        pinecone = cls(
-            index_name=index_name,
-            embedding=embedding,
-            text_key=text_key,
-            namespace=namespace,
-            **kwargs,
-        )
-
-        await pinecone.aadd_texts(
-            texts,
-            metadatas=metadatas,
-            ids=ids,
-            namespace=namespace,
-            batch_size=batch_size,
-            embedding_chunk_size=embeddings_chunk_size,
-            id_prefix=id_prefix,
-            **(upsert_kwargs or {}),
-        )
-
-        return pinecone
-
-    @classmethod
-    def from_existing_index(
-        cls,
-        index_name: str,
-        embedding: Embeddings,
-        text_key: str = "text",
-        namespace: Optional[str] = None,
-        pool_threads: int = 4,
-    ) -> PineconeVectorStore:
-        """Load pinecone vectorstore from index name."""
-        pinecone_index = cls.get_pinecone_index(index_name, pool_threads)
-        return cls(pinecone_index, embedding, text_key, namespace)
 
     def delete(
         self,
