@@ -24,11 +24,12 @@ from langchain_core.vectorstores import VectorStore
 from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
 from pinecone import PineconeAsyncio as PineconeAsyncioClient
 from pinecone.data import _Index, _IndexAsyncio  # type: ignore[import-untyped]
+from pinecone.data.index import ApplyResult  # type: ignore[import-untyped]
 
 from langchain_pinecone._utilities import DistanceStrategy, maximal_marginal_relevance
 
 if TYPE_CHECKING:
-    from pinecone import Index
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -311,7 +312,7 @@ class PineconeVectorStore(VectorStore):
             chunk_ids = ids[i : i + embedding_chunk_size]
             chunk_metadatas = metadatas[i : i + embedding_chunk_size]
             embeddings = self._embedding.embed_documents(chunk_texts)
-            vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+            vector_tuples = list(zip(chunk_ids, embeddings, chunk_metadatas))
             self.index.upsert(
                 vectors=vector_tuples,
                 namespace=namespace,
@@ -455,6 +456,9 @@ class PineconeVectorStore(VectorStore):
             namespace=namespace,
             filter=filter,
         )
+        if isinstance(results, ApplyResult):
+            raise ValueError("Received asynchronous result from synchronous call.")
+
         for res in results["matches"]:
             metadata = res["metadata"]
             id = res.get("id")
@@ -610,6 +614,8 @@ class PineconeVectorStore(VectorStore):
             namespace=namespace,
             filter=filter,
         )
+        if isinstance(results, ApplyResult):
+            raise ValueError("Received asynchronous result from synchronous call.")
         mmr_selected = maximal_marginal_relevance(
             np.array([embedding], dtype=np.float32),
             [item["values"] for item in results["matches"]],
@@ -737,7 +743,7 @@ class PineconeVectorStore(VectorStore):
         pool_threads: int = 4,
         *,
         pinecone_api_key: Optional[str] = None,
-    ) -> Index:
+    ) -> _Index:
         """Return a Pinecone Index instance.
 
         Args:
@@ -753,7 +759,7 @@ class PineconeVectorStore(VectorStore):
         indexes = client.list_indexes()
         index_names = [i.name for i in indexes.index_list["indexes"]]
 
-        if index_name in index_names:
+        if index_name and index_name in index_names:
             index = client.Index(index_name)
         elif len(index_names) == 0:
             raise ValueError(

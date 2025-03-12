@@ -1,13 +1,21 @@
-from typing import Type
+from typing import TYPE_CHECKING, Type
 from unittest.mock import Mock
 
 import pytest
-from pinecone import SparseValues
+from pinecone import SparseValues  # type: ignore[import-untyped]
 from pytest_mock import AsyncMockType, MockerFixture
 
 from langchain_pinecone.embeddings import PineconeEmbeddings, PineconeSparseEmbeddings
 from langchain_pinecone.vectorstores import PineconeVectorStore
 from langchain_pinecone.vectorstores_sparse import PineconeSparseVectorStore
+
+if TYPE_CHECKING:
+    from pytest import FixtureRequest as __FixtureRequest
+
+    class FixtureRequest(__FixtureRequest):
+        param: str
+else:
+    from pytest import FixtureRequest
 
 
 @pytest.fixture
@@ -75,7 +83,7 @@ def test_id_prefix() -> None:
     vectorstore.add_texts(texts, id_prefix=id_prefix)
 
 
-def test_sparse_vectorstore__raises_on_dense_embedding(mocker: MockerFixture):
+def test_sparse_vectorstore__raises_on_dense_embedding(mocker: MockerFixture) -> None:
     with pytest.raises(ValueError):
         PineconeSparseVectorStore(embedding=mocker.Mock(spec=PineconeEmbeddings))
 
@@ -90,7 +98,7 @@ def test_sparse_vectorstore__raises_on_dense_embedding(mocker: MockerFixture):
 class TestVectorstores:
     def test_initialization(
         self,
-        request,
+        request: FixtureRequest,
         vectorstore_cls: Type[PineconeVectorStore],
         mock_index: Mock,
         mock_embedding_obj: str,
@@ -104,7 +112,7 @@ class TestVectorstores:
     @pytest.mark.asyncio
     async def test_aadd_texts__calls_index_upsert(
         self,
-        request,
+        request: FixtureRequest,
         vectorstore_cls: Type[PineconeVectorStore],
         mock_embedding_obj: str,
         mock_async_index: AsyncMockType,
@@ -131,7 +139,7 @@ class TestVectorstores:
     @pytest.mark.asyncio
     async def test_initialising_with_sync_index__still_uses_async_index(
         self,
-        request,
+        request: FixtureRequest,
         mocker: MockerFixture,
         vectorstore_cls: Type[PineconeVectorStore],
         mock_index: AsyncMockType,
@@ -169,7 +177,7 @@ class TestVectorstores:
     @pytest.mark.asyncio
     async def test_asimilarity_search_with_score(
         self,
-        request,
+        request: FixtureRequest,
         mocker: MockerFixture,
         vectorstore_cls: Type[PineconeVectorStore],
         mock_embedding_obj: str,
@@ -209,7 +217,7 @@ class TestVectorstores:
     @pytest.mark.asyncio
     async def test_adelete(
         self,
-        request,
+        request: FixtureRequest,
         mocker: MockerFixture,
         vectorstore_cls: Type[PineconeVectorStore],
         mock_embedding_obj: str,

@@ -13,13 +13,15 @@ from typing import (
     TypeVar,
 )
 
-import numpy as np
 from langchain_core.documents import Document
 from langchain_core.utils import batch_iterate
 from langchain_core.vectorstores import VectorStore
-from pinecone import SparseValues, Vector
+from pinecone import SparseValues, Vector  # type: ignore[import-untyped]
 
-from langchain_pinecone._utilities import DistanceStrategy, maximal_marginal_relevance
+from langchain_pinecone._utilities import (
+    DistanceStrategy,
+    sparse_maximal_marginal_relevance,
+)
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 from langchain_pinecone.vectorstores import PineconeVectorStore
 
@@ -188,6 +190,28 @@ class PineconeSparseVectorStore(PineconeVectorStore):
                 await asyncio.gather(*tasks)
 
         return ids
+
+    def similarity_search_with_score(
+        self,
+        query: str,
+        k: int = 4,
+        filter: Optional[dict] = None,
+        namespace: Optional[str] = None,
+    ) -> List[Tuple[Document, float]]:
+        """Return pinecone documents most similar to query, along with scores.
+
+        Args:
+            query: Text to look up documents similar to.
+            k: Number of Documents to return. Defaults to 4.
+            filter: Dictionary of argument(s) to filter on metadata
+            namespace: Namespace to search in. Default will search in '' namespace.
+
+        Returns:
+            List of Documents most similar to the query and score for each
+        """
+        return self.similarity_search_by_vector_with_score(
+            self.embeddings.embed_query(query), k=k, filter=filter, namespace=namespace
+        )
 
     async def asimilarity_search_with_score(
         self,
@@ -362,9 +386,12 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             namespace=namespace,
             filter=filter,
         )
-        mmr_selected = maximal_marginal_relevance(
-            np.array([embedding], dtype=np.float32),
-            [item["values"] for item in results["matches"]],
+        mmr_selected = sparse_maximal_marginal_relevance(
+            query_embedding=embedding,
+            embedding_list=[
+                SparseValues.from_dict(item["sparse_values"])
+                for item in results["matches"]  # type: ignore
+            ],
             k=k,
             lambda_mult=lambda_mult,
         )
@@ -376,7 +403,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
 
     async def amax_marginal_relevance_search_by_vector(
         self,
-        embedding: List[float],
+        embedding: SparseValues,
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
@@ -408,7 +435,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
 
         async with self.async_index as idx:
             results = await idx.query(
-                vector=embedding,
+                sparse_vector=embedding,
                 top_k=fetch_k,
                 include_values=True,
                 include_metadata=True,
@@ -416,9 +443,12 @@ class PineconeSparseVectorStore(PineconeVectorStore):
                 filter=filter,
             )
 
-        mmr_selected = maximal_marginal_relevance(
-            np.array([embedding], dtype=np.float32),
-            [item["values"] for item in results["matches"]],
+        mmr_selected = sparse_maximal_marginal_relevance(
+            query_embedding=embedding,
+            embedding_list=[
+                SparseValues.from_dict(item["sparse_values"])
+                for item in results["matches"]  # type: ignore
+            ],
             k=k,
             lambda_mult=lambda_mult,
         )
