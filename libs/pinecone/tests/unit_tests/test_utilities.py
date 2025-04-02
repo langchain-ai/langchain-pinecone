@@ -1,4 +1,5 @@
 import unittest
+import warnings
 
 import numpy as np
 from pinecone import SparseValues  # type: ignore[import-untyped]
@@ -182,3 +183,41 @@ class TestSparseUtilities(unittest.TestCase):
         self.assertEqual(result[1], 3)
         # Remaining picks should maximize diversity
         self.assertEqual(result[2], 2)
+
+    def test_numpy_promotion_warnings(self) -> None:
+        """Test that numpy promotion warnings (indicating issues between v1 and v2) are not raised."""
+        np._set_promotion_state("weak_and_warn")
+        # Create sparse vectors with known cosine similarity
+        x = SparseValues(indices=[0, 1, 2], values=[1.0, 2.0, 3.0])
+        y = SparseValues(indices=[0, 1, 2], values=[1.0, 2.0, 3.0])
+        # Create embeddings with varying similarities to the x
+        embeddings = [
+            SparseValues(
+                indices=[0, 1, 2], values=[1.0, 1.0, 1.0]
+            ),  # identical to query
+            SparseValues(indices=[0, 1], values=[1.0, 1.0]),  # similar to query
+            SparseValues(
+                indices=[0, 1, 2], values=[0.8, 0.8, 0.8]
+            ),  # similar to first embedding
+            SparseValues(
+                indices=[3, 4, 5], values=[1.0, 1.0, 1.0]
+            ),  # different from query
+        ]
+
+        # Confirm no issues for sparse cosine similarity
+        with warnings.catch_warnings(record=True) as w:
+            # Test cosine similarity
+            _ = sparse_cosine_similarity(x, [y])
+            # Assert no numpy warnings were raised
+            assert len(w) == 0, (
+                f"Numpy v1 -> v2 promotion warnings raised for `sparse_cosine_similarity`: {w}"
+            )
+
+        # Confirm no issues for MMR
+        with warnings.catch_warnings(record=True) as w:
+            # Test MMR
+            _ = sparse_maximal_marginal_relevance(x, embeddings, lambda_mult=1.0, k=3)
+            # Assert no numpy warnings were raised
+            assert len(w) == 0, (
+                f"Numpy v1 -> v2 promotion warnings raised for `sparse_maximal_marginal_relevance`: {w}"
+            )
