@@ -46,7 +46,7 @@ disallow_untyped_defs = "True"
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "T201"]
+select = ["E", "F", "I", "T201", "NPY201"]
 ignore = ["E501"]
 
 [tool.coverage.run]
