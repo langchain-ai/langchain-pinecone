@@ -241,19 +241,17 @@ class PineconeVectorStore(VectorStore):
             client = PineconeClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
             )
-            self._index = client.Index(host=self._index_host)
+            return client.Index(host=self._index_host)
         return self._index
 
     @property
     def async_index(self) -> _IndexAsyncio:
         """Get asynchronous index instance."""
         if self._async_index is None:
-            if not hasattr(self, "_index_host"):
-                raise ValueError("No index host available")
             client = PineconeAsyncioClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
             )
-            self._async_index = client.IndexAsyncio(host=self.index.config.host)
+            return client.IndexAsyncio(host=self.index.config.host)
         return self._async_index
 
     @property

@@ -74,11 +74,9 @@ class PineconeEmbeddings(BaseModel, Embeddings):
     @property
     def async_client(self) -> PineconeAsyncioClient:
         """Lazily initialize the async client."""
-        if self._async_client is None:
-            self._async_client = PineconeAsyncioClient(
-                api_key=self.pinecone_api_key.get_secret_value(), source_tag="langchain"
-            )
-        return self._async_client
+        return PineconeAsyncioClient(
+            api_key=self.pinecone_api_key.get_secret_value(), source_tag="langchain"
+        )
 
     @model_validator(mode="before")
     @classmethod
