@@ -627,7 +627,7 @@ wheels = [
 
 [[package]]
 name = "langchain-pinecone"
-version = "0.2.4"
+version = "0.2.5rc1"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
