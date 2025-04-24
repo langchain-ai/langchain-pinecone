@@ -36,7 +36,11 @@ test = [
 codespell = ["codespell<3.0.0,>=2.2.0"]
 test_integration = ["langchain-openai<0.4,>=0.3.6"]
 lint = ["ruff<1.0,>=0.5"]
-dev = ["langchain-core"]
+dev = [
+    "ipykernel>=6.29.5",
+    "langchain-core",
+    "pip>=25.0.1",
+]
 typing = ["mypy<2.0,>=1.10", "simsimd<6.0.0,>=5.0.0"]
 
 [tool.mypy]
