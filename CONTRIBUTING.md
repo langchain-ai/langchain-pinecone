@@ -46,5 +46,9 @@ While we encourage you to initiate a draft Pull Request early to get feedback on
     cd libs/pinecone/
 
     # Create a virtual environment (if using uv)
-    uv sync
+    uv venv --python 3.12.7  # python arg is optional
+    # Activate venv
+    source .venv/bin/activate
+    # install all dev dependencies
+    uv sync --group test --group codespell --group test_integration --group lint --group dev --group typing
     ```
