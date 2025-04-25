@@ -17,7 +17,6 @@ Please follow these guidelines when making a contribution:
     - Ensure that, for any new code, new PyTests are written in the appropriate test directory (`/libs/pinecone/tests/unit_tests` or `/libs/pinecone/tests/integration_tests`). If any code is removed, ensure that corresponding PyTests are also removed. Verify all tests pass by running:
         - `make test` for unit tests
         - `make integration_tests` for integration tests (when applicable)
-    - Codecov checks will inform you if any code is not covered by PyTests upon creating the PR. You should aim to cover new code with PyTests.
 
 > **Feedback and Discussion:**
 While we encourage you to initiate a draft Pull Request early to get feedback on your implementation, we also highly value discussions and questions. If you're unsure about any aspect of your contribution or need clarification on the project's direction, please don't hesitate to use the [Issues section](https://github.com/langchain-ai/langchain-pinecone/issues) of our repository. Engaging in discussions or asking questions before starting your work can help ensure that your efforts align well with the project's goals and existing work.
