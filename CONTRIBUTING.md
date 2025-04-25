@@ -35,7 +35,7 @@ While we encourage you to initiate a draft Pull Request early to get feedback on
     git clone https://github.com/<your-gh-username>/langchain-pinecone.git
     ```
 
-3. Ensure you have [`uv` installed](https://docs.astral.sh/uv/getting-started/installation/), for macOS and Linux use `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+3. Ensure you have [`uv` installed](https://docs.astral.sh/uv/getting-started/installation/), for macOS use `brew install uv` or for Linux (and Mac) use `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 
 4. Then navigate to the cloned folder and the specific library folder:
     ```
