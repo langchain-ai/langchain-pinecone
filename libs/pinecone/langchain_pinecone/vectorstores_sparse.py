@@ -34,6 +34,144 @@ VST = TypeVar("VST", bound=VectorStore)
 
 
 class PineconeSparseVectorStore(PineconeVectorStore):
+    """Pinecone sparse vector store integration.
+
+    This class extends PineconeVectorStore to support sparse vector representations.
+    It requires a Pinecone sparse index and PineconeSparseEmbeddings.
+
+    Setup:
+        ```python
+        # Install required packages
+        pip install langchain-pinecone pinecone-client
+        ```
+
+    Key init args - indexing params:
+        text_key (str): The metadata key where the document text will be stored.
+        namespace (str): Pinecone namespace to use.
+        distance_strategy (DistanceStrategy): Strategy for computing distances.
+
+    Key init args - client params:
+        index (pinecone.Index): A Pinecone sparse index.
+        embedding (PineconeSparseEmbeddings): A sparse embeddings model.
+        pinecone_api_key (str): The Pinecone API key.
+        index_name (str): The name of the Pinecone index.
+
+    See full list of supported init args and their descriptions in the params section.
+
+    Instantiate:
+        ```python
+        from pinecone import Pinecone
+        from langchain_pinecone import PineconeSparseVectorStore
+        from langchain_pinecone.embeddings import PineconeSparseEmbeddings
+
+        # Initialize Pinecone client
+        pc = Pinecone(api_key="your-api-key")
+
+        # Get your sparse index
+        index = pc.Index("your-sparse-index-name")
+
+        # Initialize embedding function
+        embeddings = PineconeSparseEmbeddings()
+
+        # Create vector store
+        vectorstore = PineconeSparseVectorStore(
+            index=index,
+            embedding=embeddings,
+            text_key="content",
+            namespace="my-namespace"
+        )
+        ```
+
+    Add Documents:
+        ```python
+        from langchain_core.documents import Document
+
+        docs = [
+            Document(page_content="This is a sparse vector example"),
+            Document(page_content="Another document for testing")
+        ]
+
+        # Option 1: Add from Document objects
+        vectorstore.add_documents(docs)
+
+        # Option 2: Add from texts
+        texts = ["Text 1", "Text 2"]
+        metadatas = [{"source": "source1"}, {"source": "source2"}]
+        vectorstore.add_texts(texts, metadatas=metadatas)
+        ```
+
+    Update Documents:
+        Update documents by re-adding them with the same IDs.
+        ```python
+        ids = ["id1", "id2"]
+        texts = ["Updated text 1", "Updated text 2"]
+        metadatas = [{"source": "updated_source1"}, {"source": "updated_source2"}]
+
+        vectorstore.add_texts(texts, metadatas=metadatas, ids=ids)
+        ```
+
+    Delete Documents:
+        ```python
+        # Delete by IDs
+        vectorstore.delete(ids=["id1", "id2"])
+
+        # Delete by filter
+        vectorstore.delete(filter={"source": "source1"})
+
+        # Delete all documents in a namespace
+        vectorstore.delete(delete_all=True, namespace="my-namespace")
+        ```
+
+    Search:
+        ```python
+        # Search for similar documents
+        docs = vectorstore.similarity_search("query text", k=5)
+
+        # Search with filters
+        docs = vectorstore.similarity_search(
+            "query text",
+            k=5,
+            filter={"source": "source1"}
+        )
+
+        # Maximal marginal relevance search for diversity
+        docs = vectorstore.max_marginal_relevance_search(
+            "query text",
+            k=5,
+            fetch_k=20,
+            lambda_mult=0.5
+        )
+        ```
+
+    Search with score:
+        ```python
+        # Search with relevance scores
+        docs_and_scores = vectorstore.similarity_search_with_score(
+            "query text",
+            k=5
+        )
+
+        for doc, score in docs_and_scores:
+            print(f"Score: {score}, Document: {doc.page_content}")
+        ```
+
+    Use as Retriever:
+        ```python
+        # Create a retriever
+        retriever = vectorstore.as_retriever()
+
+        # Customize retriever
+        retriever = vectorstore.as_retriever(
+            search_type="mmr",
+            search_kwargs={"k": 5, "fetch_k": 20, "lambda_mult": 0.5},
+            filter={"source": "source1"}
+        )
+
+        # Use the retriever
+        docs = retriever.get_relevant_documents("query text")
+        ```
+    """
+
     def __init__(
         self,
         index: Optional[Any] = None,
