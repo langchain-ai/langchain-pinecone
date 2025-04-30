@@ -1,4 +1,5 @@
 from langchain_pinecone.embeddings import PineconeEmbeddings, PineconeSparseEmbeddings
+from langchain_pinecone.pinecone_rerank import PineconeRerank
 from langchain_pinecone.vectorstores import Pinecone, PineconeVectorStore
 from langchain_pinecone.vectorstores_sparse import PineconeSparseVectorStore
 
@@ -8,4 +9,5 @@ __all__ = [
     "PineconeVectorStore",
     "PineconeSparseVectorStore",
     "Pinecone",
+    "PineconeRerank"
 ]
