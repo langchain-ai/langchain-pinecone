@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import uuid
@@ -89,6 +90,28 @@ class TestPinecone(VectorStoreIntegrationTests):
         output[0].id = None  # overwrite ID for ease of comparison
         assert output == [Document(page_content=needs)]
 
+    @pytest.mark.asyncio
+    async def test_afrom_texts(
+        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+    ) -> None:
+        """Test end to end construction and search."""
+        unique_id = uuid.uuid4().hex
+        needs = f"foobuu {unique_id} booo"
+        texts.insert(0, needs)
+
+        docsearch = await PineconeVectorStore.afrom_texts(
+            texts=texts,
+            embedding=embedding_openai,
+            index_name=INDEX_NAME,
+            namespace=NAMESPACE_NAME,
+        )
+        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
+        output = await docsearch.asimilarity_search(
+            unique_id, k=1, namespace=NAMESPACE_NAME
+        )
+        output[0].id = None  # overwrite ID for ease of comparison
+        assert output == [Document(page_content=needs)]
+
     def test_from_texts_with_metadatas(
         self, texts: List[str], embedding_openai: OpenAIEmbeddings
     ) -> None:
@@ -115,6 +138,33 @@ class TestPinecone(VectorStoreIntegrationTests):
         # TODO: why metadata={"page": 0.0}) instead of {"page": 0}?
         assert output == [Document(page_content=needs, metadata={"page": 0.0})]
 
+    @pytest.mark.asyncio
+    async def test_afrom_texts_with_metadatas(
+        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+    ) -> None:
+        """Test end to end construction and search."""
+
+        unique_id = uuid.uuid4().hex
+        needs = f"foobuu {unique_id} booo"
+        texts = [needs] + texts
+
+        metadatas = [{"page": i} for i in range(len(texts))]
+
+        namespace = f"{NAMESPACE_NAME}-md"
+        docsearch = await PineconeVectorStore.afrom_texts(
+            texts,
+            embedding_openai,
+            index_name=INDEX_NAME,
+            metadatas=metadatas,
+            namespace=namespace,
+        )
+        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
+        output = await docsearch.asimilarity_search(needs, k=1, namespace=namespace)
+
+        output[0].id = None
+        # TODO: why metadata={"page": 0.0}) instead of {"page": 0}?
+        assert output == [Document(page_content=needs, metadata={"page": 0.0})]
+
     def test_from_texts_with_scores(self, embedding_openai: OpenAIEmbeddings) -> None:
         """Test end to end construction and search with scores and IDs."""
         texts = ["foo", "bar", "baz"]
@@ -130,6 +180,41 @@ class TestPinecone(VectorStoreIntegrationTests):
         print(texts)  # noqa: T201
         time.sleep(DEFAULT_SLEEP)  # prevent race condition
         output = docsearch.similarity_search_with_score(
+            "foo", k=3, namespace=NAMESPACE_NAME
+        )
+        docs = [o[0] for o in output]
+        scores = [o[1] for o in output]
+        sorted_documents = sorted(docs, key=lambda x: x.metadata["page"])
+        print(sorted_documents)  # noqa: T201
+
+        for document in sorted_documents:
+            document.id = None  # overwrite IDs for ease of comparison
+        # TODO: why metadata={"page": 0.0}) instead of {"page": 0}, etc???
+        assert sorted_documents == [
+            Document(page_content="foo", metadata={"page": 0.0}),
+            Document(page_content="bar", metadata={"page": 1.0}),
+            Document(page_content="baz", metadata={"page": 2.0}),
+        ]
+        assert scores[0] > scores[1] > scores[2]
+
+    @pytest.mark.asyncio
+    async def test_afrom_texts_with_scores(
+        self, embedding_openai: OpenAIEmbeddings
+    ) -> None:
+        """Test end to end construction and search with scores and IDs."""
+        texts = ["foo", "bar", "baz"]
+        metadatas = [{"page": i} for i in range(len(texts))]
+        print("metadatas", metadatas)  # noqa: T201
+        docsearch = await PineconeVectorStore.afrom_texts(
+            texts,
+            embedding_openai,
+            index_name=INDEX_NAME,
+            metadatas=metadatas,
+            namespace=NAMESPACE_NAME,
+        )
+        print(texts)  # noqa: T201
+        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
+        output = await docsearch.asimilarity_search_with_score(
             "foo", k=3, namespace=NAMESPACE_NAME
         )
         docs = [o[0] for o in output]
@@ -237,6 +322,28 @@ class TestPinecone(VectorStoreIntegrationTests):
             (1 >= score or np.isclose(score, 1)) and score >= 0 for _, score in output
         )
 
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(reason="relevance score just over 1")
+    async def test_arelevance_score_bound(
+        self, embedding_openai: OpenAIEmbeddings
+    ) -> None:
+        """Ensures all relevance scores are between 0 and 1."""
+        texts = ["foo", "bar", "baz"]
+        metadatas = [{"page": i} for i in range(len(texts))]
+        docsearch = await PineconeVectorStore.afrom_texts(
+            texts,
+            embedding_openai,
+            index_name=INDEX_NAME,
+            metadatas=metadatas,
+        )
+        # wait for the index to be ready
+        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
+        output = await docsearch.asimilarity_search_with_relevance_scores("foo", k=3)
+        print(output)  # noqa: T201
+        assert all(
+            (1 >= score or np.isclose(score, 1)) and score >= 0 for _, score in output
+        )
+
     @pytest.mark.skipif(reason="slow to run for benchmark")
     @pytest.mark.parametrize(
         "pool_threads,batch_size,embeddings_chunk_size,data_multiplier",
@@ -314,7 +421,6 @@ class TestPinecone(VectorStoreIntegrationTests):
                 embedding=embedding_openai,
                 index_name=INDEX_NAME,
                 namespace=NAMESPACE_NAME,
-                async_req=True,
             )
 
     @pytest.mark.usefixtures("mock_pool_not_supported")
@@ -326,5 +432,4 @@ class TestPinecone(VectorStoreIntegrationTests):
             embedding=embedding_openai,
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
-            async_req=False,
         )

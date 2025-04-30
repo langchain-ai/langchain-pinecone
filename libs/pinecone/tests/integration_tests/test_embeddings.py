@@ -3,20 +3,29 @@ from typing import AsyncGenerator
 
 import pytest
 from langchain_core.documents import Document
-from pinecone import Pinecone, ServerlessSpec  # type: ignore
+from pinecone import Pinecone, ServerlessSpec, SparseValues  # type: ignore
 
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
+from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 from tests.integration_tests.test_vectorstores import DEFAULT_SLEEP
 
 DIMENSION = 1024
 INDEX_NAME = "langchain-pinecone-embeddings"
 MODEL = "multilingual-e5-large"
+SPARSE_MODEL_NAME = "pinecone-sparse-english-v0"
 NAMESPACE_NAME = "test_namespace"
 
 
 @pytest.fixture(scope="function")
 async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
     client = PineconeEmbeddings(model=MODEL)
+    yield client
+    await client.async_client.close()
+
+
+@pytest.fixture(scope="function")
+async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]:
+    client = PineconeSparseEmbeddings(model=SPARSE_MODEL_NAME)
     yield client
     await client.async_client.close()
 
@@ -47,6 +56,13 @@ def test_embed_query(embd_client: PineconeEmbeddings) -> None:
     out = embd_client.embed_query("Hello, world!")
     assert isinstance(out, list)
     assert len(out) == DIMENSION
+
+
+def test_sparse_embed_query(sparse_embd_client: PineconeSparseEmbeddings) -> None:
+    out = sparse_embd_client.embed_query("Hello, world!")
+    assert isinstance(out, SparseValues)
+    assert len(out.indices) == 2
+    assert len(out.values) == 2
 
 
 @pytest.mark.asyncio
