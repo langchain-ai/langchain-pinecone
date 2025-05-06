@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.utils import secret_from_env
-from pinecone import Pinecone
+from pinecone import Pinecone  # type: ignore
 from pydantic import ConfigDict, Field, SecretStr, model_validator
 from typing_extensions import Self
+
+logger = logging.getLogger(__name__)
 
 
 class PineconeRerank(BaseDocumentCompressor):
@@ -239,7 +242,7 @@ class PineconeRerank(BaseDocumentCompressor):
             return result_dicts
 
         except Exception as e:
-            print(f"Rerank error: {e}")
+            logger.error(f"Rerank error: {e}")
             return []
 
     def compress_documents(

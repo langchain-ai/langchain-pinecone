@@ -11,7 +11,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_pinecone_rerank_basic():
+def test_pinecone_rerank_basic() -> None:
     """Test basic reranking functionality."""
     reranker = PineconeRerank(model="bge-reranker-v2-m3")
     query = "What is the capital of France?"
@@ -31,7 +31,7 @@ def test_pinecone_rerank_basic():
     assert "Paris is the capital of France." in compressed_docs[0].page_content
 
 
-def test_pinecone_rerank_top_n():
+def test_pinecone_rerank_top_n() -> None:
     """Test reranking with a specific top_n value."""
     reranker = PineconeRerank(model="bge-reranker-v2-m3", top_n=1)
     query = "What is the capital of France?"
@@ -47,7 +47,7 @@ def test_pinecone_rerank_top_n():
     assert "Paris is the capital of France." in compressed_docs[0].page_content
 
 
-def test_pinecone_rerank_rank_fields():
+def test_pinecone_rerank_rank_fields() -> None:
     """Test reranking using specific rank_fields."""
     # Test ranking by the 'text' field explicitly (was 'content')
     reranker = PineconeRerank(model="bge-reranker-v2-m3", rank_fields=["text"])
@@ -79,7 +79,7 @@ def test_pinecone_rerank_rank_fields():
     assert climate_related, "Expected to find climate-related content in top results"
 
 
-def test_pinecone_rerank_with_parameters():
+def test_pinecone_rerank_with_parameters() -> None:
     """Test reranking with additional model parameters."""
     # Note: The specific parameters depend on the model. 'truncate' is common.
     reranker = PineconeRerank(model="bge-reranker-v2-m3")
@@ -103,6 +103,3 @@ def test_pinecone_rerank_with_parameters():
             quantum_found = True
             break
     assert quantum_found, "Expected to find quantum entanglement document in results"
-
-
-# Add more tests for edge cases or specific model behaviors if necessary

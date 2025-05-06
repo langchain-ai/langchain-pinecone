@@ -1,9 +1,10 @@
 import os
+from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.documents import Document
-from pinecone import Pinecone
+from pinecone import Pinecone  # type: ignore
 from pydantic import SecretStr
 
 from langchain_pinecone.rerank import PineconeRerank
@@ -11,14 +12,14 @@ from langchain_pinecone.rerank import PineconeRerank
 
 class TestPineconeRerank:
     @pytest.fixture
-    def mock_pinecone_client(self):
+    def mock_pinecone_client(self) -> MagicMock:
         """Fixture to provide a mocked Pinecone client."""
         mock_client = MagicMock(spec=Pinecone)
         mock_client.inference = MagicMock()
         return mock_client
 
     @pytest.fixture
-    def mock_rerank_response(self):
+    def mock_rerank_response(self) -> MagicMock:
         """Fixture to provide a mocked rerank API response."""
         mock_result1 = MagicMock()
         mock_result1.id = "doc0"
@@ -36,7 +37,7 @@ class TestPineconeRerank:
         mock_response.data = [mock_result1, mock_result2]
         return mock_response
 
-    def test_initialization_with_api_key(self, mock_pinecone_client):
+    def test_initialization_with_api_key(self, mock_pinecone_client: MagicMock) -> None:
         """Test initialization with API key environment variable."""
         with patch.dict(os.environ, {"PINECONE_API_KEY": "fake-api-key"}):
             with patch(
@@ -51,60 +52,47 @@ class TestPineconeRerank:
                 assert reranker.model == "test-model"
                 assert reranker.top_n == 3  # Default value
 
-    def test_initialization_with_client(self, mock_pinecone_client):
+    def test_initialization_with_client(self, mock_pinecone_client: MagicMock) -> None:
         """Test initialization with a provided Pinecone client instance."""
         reranker = PineconeRerank(client=mock_pinecone_client, model="test-model")
         assert reranker.client == mock_pinecone_client
         assert reranker.model == "test-model"
 
-    def test_initialization_missing_model(self):
+    def test_initialization_missing_model(self) -> None:
         """Test initialization fails if model is not specified."""
         with pytest.raises(ValueError, match="Did not find `model`!"):
             PineconeRerank(pinecone_api_key=SecretStr("fake-key"))
 
-    def test_initialization_invalid_client_type(self):
+    def test_initialization_invalid_client_type(self) -> None:
         """Test initialization fails with invalid client type."""
         with pytest.raises(
             ValueError, match="The 'client' parameter must be an instance of"
         ):
             PineconeRerank(client="not a pinecone client", model="test-model")
 
-    def test_validate_environment_with_api_key(self, mock_pinecone_client):
-        """Test validate_environment creates client with API key."""
+    def test_client_creation_with_api_key(
+        self, mock_pinecone_client: MagicMock
+    ) -> None:
+        """Test client is created with API key when not provided."""
         with patch.dict(os.environ, {"PINECONE_API_KEY": "fake-api-key"}):
-            # Patch the Pinecone constructor directly rather than as a context manager
-            # This way it stays patched during the entire test
             with patch(
                 "langchain_pinecone.rerank.Pinecone", return_value=mock_pinecone_client
             ) as mock_pinecone_constructor:
-                # Create reranker with client set to None to force client creation
-                # We need to create a brand new client for testing validate_environment
+                # Initialize with no client
                 reranker = PineconeRerank(model="test-model")
-                # Explicitly set client to None to ensure we test client creation
-                reranker.client = None
-
-                # Call validate_environment
-                result = reranker.validate_environment()
-
-                # Verify constructor was called with expected args
+                # Verify client was created
                 mock_pinecone_constructor.assert_called_with(api_key="fake-api-key")
-                assert result.client == mock_pinecone_client
+                assert reranker.client == mock_pinecone_client
 
-    def test_validate_environment_with_client(self, mock_pinecone_client):
-        """Test validate_environment keeps provided client."""
+    def test_client_preserved_when_provided(
+        self, mock_pinecone_client: MagicMock
+    ) -> None:
+        """Test client is preserved when explicitly provided."""
         reranker = PineconeRerank(client=mock_pinecone_client, model="test-model")
-        result = reranker.validate_environment()
-        assert result.client == mock_pinecone_client
+        assert reranker.client == mock_pinecone_client
 
-    def test_validate_model_specified(self):
-        """Test validate_model_specified passes when model is set."""
-        reranker = PineconeRerank(
-            model="test-model", pinecone_api_key=SecretStr("fake-key")
-        )
-        reranker.validate_model_specified()  # Should not raise error
-
-    def test_validate_model_specified_missing(self):
-        """Test validate_model_specified fails when model is missing."""
+    def test_model_required(self) -> None:
+        """Test model is required for initialization."""
         with pytest.raises(ValueError, match="Did not find `model`!"):
             PineconeRerank(pinecone_api_key=SecretStr("fake-key"))
 
@@ -126,7 +114,9 @@ class TestPineconeRerank:
             ),
         ],
     )
-    def test__document_to_dict(self, document_input, expected_output):
+    def test__document_to_dict(
+        self, document_input: Any, expected_output: Dict[str, Any]
+    ) -> None:
         """Test _document_to_dict handles different input types."""
         reranker = PineconeRerank(
             model="test-model", pinecone_api_key=SecretStr("fake-key")
@@ -134,7 +124,7 @@ class TestPineconeRerank:
         result = reranker._document_to_dict(document_input, 0)
         assert result == expected_output
 
-    def test_rerank_empty_documents(self, mock_pinecone_client):
+    def test_rerank_empty_documents(self, mock_pinecone_client: MagicMock) -> None:
         """Test rerank returns empty list for empty documents."""
         reranker = PineconeRerank(client=mock_pinecone_client, model="test-model")
         results = reranker.rerank([], "query")
@@ -142,8 +132,8 @@ class TestPineconeRerank:
         mock_pinecone_client.inference.rerank.assert_not_called()
 
     def test_rerank_calls_api_and_formats_results(
-        self, mock_pinecone_client, mock_rerank_response
-    ):
+        self, mock_pinecone_client: MagicMock, mock_rerank_response: MagicMock
+    ) -> None:
         """Test rerank calls API with correct args and formats results."""
         mock_pinecone_client.inference.rerank.return_value = mock_rerank_response
 
@@ -184,7 +174,9 @@ class TestPineconeRerank:
         assert results[1]["index"] == 1
         assert results[1]["document"] == {"id": "doc1", "text": "Document 2 content"}
 
-    def test_compress_documents(self, mock_pinecone_client, mock_rerank_response):
+    def test_compress_documents(
+        self, mock_pinecone_client: MagicMock, mock_rerank_response: MagicMock
+    ) -> None:
         """Test compress_documents calls rerank and formats output as Documents."""
         # Setup reranker
         reranker = PineconeRerank(
@@ -235,7 +227,9 @@ class TestPineconeRerank:
             assert compressed_docs[1].metadata["source"] == "b"
             assert compressed_docs[1].metadata["relevance_score"] == 0.7
 
-    def test_compress_documents_no_return_documents(self, mock_pinecone_client):
+    def test_compress_documents_no_return_documents(
+        self, mock_pinecone_client: MagicMock
+    ) -> None:
         """Test compress_documents when return_documents is False."""
         # Setup reranker
         reranker = PineconeRerank(
@@ -275,7 +269,9 @@ class TestPineconeRerank:
             assert compressed_docs[1].metadata["source"] == "b"
             assert compressed_docs[1].metadata["relevance_score"] == 0.7
 
-    def test_compress_documents_index_none(self, mock_pinecone_client):
+    def test_compress_documents_index_none(
+        self, mock_pinecone_client: MagicMock
+    ) -> None:
         """Test compress_documents handles results where index is None."""
         # Setup reranker
         reranker = PineconeRerank(

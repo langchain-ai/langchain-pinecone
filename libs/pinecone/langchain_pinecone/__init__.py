@@ -9,5 +9,5 @@ __all__ = [
     "PineconeVectorStore",
     "PineconeSparseVectorStore",
     "Pinecone",
-    "PineconeRerank"
+    "PineconeRerank",
 ]
