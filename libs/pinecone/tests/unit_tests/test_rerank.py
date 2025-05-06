@@ -22,15 +22,19 @@ class TestPineconeRerank:
         """Fixture to provide a mocked rerank API response."""
         mock_result1 = MagicMock()
         mock_result1.id = "doc0"
+        mock_result1.index = 0
         mock_result1.score = 0.9
-        mock_result1.document = {"id": "doc0", "content": "Document 1 content"}
+        mock_result1.document = {"id": "doc0", "text": "Document 1 content"}
 
         mock_result2 = MagicMock()
         mock_result2.id = "doc1"
+        mock_result2.index = 1
         mock_result2.score = 0.7
-        mock_result2.document = {"id": "doc1", "content": "Document 2 content"}
+        mock_result2.document = {"id": "doc1", "text": "Document 2 content"}
 
-        return [mock_result1, mock_result2]
+        mock_response = MagicMock()
+        mock_response.data = [mock_result1, mock_result2]
+        return mock_response
 
     def test_initialization_with_api_key(self, mock_pinecone_client):
         """Test initialization with API key environment variable."""
@@ -107,10 +111,10 @@ class TestPineconeRerank:
     @pytest.mark.parametrize(
         "document_input, expected_output",
         [
-            ("just a string", {"id": "doc0", "content": "just a string"}),
+            ("just a string", {"id": "doc0", "text": "just a string"}),
             (
                 Document(page_content="doc content", metadata={"source": "test"}),
-                {"id": "doc0", "content": "doc content"},
+                {"id": "doc0", "text": "doc content"},
             ),
             (
                 {"id": "custom-id", "content": "dict content"},
@@ -159,9 +163,9 @@ class TestPineconeRerank:
             model="test-model",
             query=query,
             documents=[
-                {"id": "doc0", "content": "doc1 content"},
-                {"id": "doc1", "content": "doc2 content"},
-                {"id": "doc2", "content": "doc3 content"},
+                {"id": "doc0", "text": "doc1 content"},
+                {"id": "doc1", "text": "doc2 content"},
+                {"id": "doc2", "text": "doc3 content"},
             ],
             rank_fields=["text"],
             top_n=2,
@@ -173,12 +177,12 @@ class TestPineconeRerank:
         assert results[0]["id"] == "doc0"
         assert results[0]["score"] == 0.9
         assert results[0]["index"] == 0
-        assert results[0]["document"] == {"id": "doc0", "content": "Document 1 content"}
+        assert results[0]["document"] == {"id": "doc0", "text": "Document 1 content"}
 
         assert results[1]["id"] == "doc1"
         assert results[1]["score"] == 0.7
         assert results[1]["index"] == 1
-        assert results[1]["document"] == {"id": "doc1", "content": "Document 2 content"}
+        assert results[1]["document"] == {"id": "doc1", "text": "Document 2 content"}
 
     def test_compress_documents(self, mock_pinecone_client, mock_rerank_response):
         """Test compress_documents calls rerank and formats output as Documents."""
@@ -203,13 +207,13 @@ class TestPineconeRerank:
                     "id": "doc0",
                     "index": 0,
                     "score": 0.9,
-                    "document": {"id": "doc0", "content": "Document 1 content"},
+                    "document": {"id": "doc0", "text": "Document 1 content"},
                 },
                 {
                     "id": "doc1",
                     "index": 1,
                     "score": 0.7,
-                    "document": {"id": "doc1", "content": "Document 2 content"},
+                    "document": {"id": "doc1", "text": "Document 2 content"},
                 },
             ]
 
@@ -292,7 +296,7 @@ class TestPineconeRerank:
                     "id": "unknown-doc",
                     "index": None,
                     "score": 0.5,
-                    "document": {"id": "unknown-doc", "content": "Unknown content"},
+                    "document": {"id": "unknown-doc", "text": "Unknown content"},
                 }
             ]
 
