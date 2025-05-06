@@ -94,14 +94,83 @@ class PineconeRerank(BaseDocumentCompressor):
     ) -> List[Dict[str, Any]]:
         """Returns an ordered list of documents ordered by their relevance to the provided query.
 
+        This method reranks documents using Pinecone's reranking API as part of a two-stage
+        vector retrieval process to improve result quality. It first converts documents to the
+        appropriate format, then sends them along with the query to the reranking model. The
+        reranking model scores the results based on their semantic relevance to the query and
+        returns a new, more accurate ranking.
+
         Args:
             query: The query to use for reranking.
-            documents: A sequence of documents to rerank.
-            rank_fields: A sequence of keys to use for reranking.
+            documents: A sequence of documents to rerank. Can be strings, Document objects,
+                or dictionaries with an optional 'id' field and text content.
+            rank_fields: A sequence of keys to use for reranking when documents are dictionaries.
+                Only the first field is used for models that support a single rank field.
+            model: The model to use for reranking. Defaults to self.model.
+                Supported models include 'bge-reranker-v2-m3', 'pinecone-rerank-v0',
+                and 'cohere-rerank-3.5'.
             top_n: The number of results to return. If None returns all results.
                 Defaults to self.top_n.
             truncate: How to truncate documents if they exceed token limits. Options: "END",
                 "MIDDLE". Defaults to "END".
+
+        Returns:
+            A list of dictionaries containing:
+                - id: The document ID
+                - index: The original index in the input documents sequence
+                - score: The relevance score (0-1, with 1 being most relevant)
+                - document: The document content (if return_documents=True)
+
+        Examples:
+            ```python
+            from langchain_pinecone import PineconeRerank
+            from langchain_core.documents import Document
+            from pinecone import Pinecone
+
+            # Initialize Pinecone client
+            pc = Pinecone(api_key="your-api-key")
+
+            # Create the reranker
+            reranker = PineconeRerank(
+                client=pc,
+                model="bge-reranker-v2-m3",
+                top_n=2
+            )
+
+            # Create sample documents
+            documents = [
+                Document(page_content="Apple is a popular fruit known for its sweetness."),
+                Document(page_content="Apple Inc. has revolutionized the tech industry."),
+                Document(page_content="An apple a day keeps the doctor away."),
+            ]
+
+            # Rerank documents
+            rerank_results = reranker.rerank(
+                documents=documents,
+                query="Tell me about the tech company Apple",
+            )
+
+            # Display results
+            for result in rerank_results:
+                print(f"Score: {result['score']}, Document: {result['document']}")
+            ```
+
+            Using dictionaries with custom fields:
+            ```python
+            # Create documents as dictionaries with custom fields
+            docs = [
+                {"id": "doc1", "content": "Apple is a fruit known for its sweetness."},
+                {"id": "doc2", "content": "Apple Inc. creates innovative tech products."},
+            ]
+
+            # Rerank using a custom field
+            results = reranker.rerank(
+                documents=docs,
+                query="tech companies",
+                rank_fields=["content"],
+                top_n=1
+            )
+            ```
         """
         if len(documents) == 0:  # to avoid empty API call
             return []
