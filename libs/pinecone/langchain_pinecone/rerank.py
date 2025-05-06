@@ -3,8 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-import yaml
-from langchain_core.callbacks.manager import Callbacks
+from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.utils import secret_from_env
 from pinecone import Pinecone
@@ -38,14 +37,18 @@ class PineconeRerank(BaseDocumentCompressor):
 
     @model_validator(mode="after")
     def validate_environment(self) -> Self:  # type: ignore[valid-type]
-        """Validate that api key and python package exists in environment."""
+        """Validate that api key and python package exists in environment.""" 
         if not self.client:
             if isinstance(self.pinecone_api_key, SecretStr):
-                pinecone_api_key: Optional[str] = self.pinecone_api_key.get_secret_value()
+                pinecone_api_key: Optional[str] = (
+                    self.pinecone_api_key.get_secret_value()
+                )
             else:
                 pinecone_api_key = self.pinecone_api_key
             self.client = Pinecone(api_key=pinecone_api_key)
-        elif not isinstance(self.client, Pinecone):
+        elif not isinstance(self.client, object) or not hasattr(
+            self.client, "inference"
+        ):
             raise ValueError(
                 "The 'client' parameter must be an instance of pinecone.Pinecone.\n"
                 "You may create the Pinecone object like:\n\n"
@@ -97,19 +100,19 @@ class PineconeRerank(BaseDocumentCompressor):
             rank_fields: A sequence of keys to use for reranking.
             top_n: The number of results to return. If None returns all results.
                 Defaults to self.top_n.
-            truncate: How to truncate documents if they exceed token limits. Options: "END", 
+            truncate: How to truncate documents if they exceed token limits. Options: "END",
                 "MIDDLE". Defaults to "END".
         """
         if len(documents) == 0:  # to avoid empty API call
             return []
-            
+
         docs = [self._document_to_dict(doc, i) for i, doc in enumerate(documents)]
         model = model or self.model
         rank_fields = rank_fields or self.rank_fields
         top_n = top_n if top_n is not None else self.top_n
-        
+
         parameters = {"truncate": truncate}
-        
+
         results = self.client.inference.rerank(
             model=model,
             query=query,
@@ -117,20 +120,22 @@ class PineconeRerank(BaseDocumentCompressor):
             rank_fields=rank_fields,
             top_n=top_n,
             return_documents=self.return_documents,
-            parameters=parameters
+            parameters=parameters,
         )
-        
+
         result_dicts = []
         for res in results:
             result_dict = {
                 "id": res.id,
-                "index": next((i for i, doc in enumerate(docs) if doc["id"] == res.id), None),
-                "score": res.score
+                "index": next(
+                    (i for i, doc in enumerate(docs) if doc["id"] == res.id), None
+                ),
+                "score": res.score,
             }
             if hasattr(res, "document") and res.document:
                 result_dict["document"] = res.document
             result_dicts.append(result_dict)
-            
+
         return result_dicts
 
     def compress_documents(
@@ -152,12 +157,12 @@ class PineconeRerank(BaseDocumentCompressor):
         """
         compressed = []
         reranked_results = self.rerank(documents, query)
-        
+
         for res in reranked_results:
             if res["index"] is not None:
                 doc = documents[res["index"]]
                 doc_copy = Document(doc.page_content, metadata=deepcopy(doc.metadata))
                 doc_copy.metadata["relevance_score"] = res["score"]
                 compressed.append(doc_copy)
-        
+
         return compressed
