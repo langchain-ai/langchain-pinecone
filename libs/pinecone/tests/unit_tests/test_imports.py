@@ -6,6 +6,7 @@ EXPECTED_ALL = [
     "PineconeVectorStore",
     "PineconeSparseVectorStore",
     "Pinecone",
+    "PineconeRerank",
 ]
 
 
