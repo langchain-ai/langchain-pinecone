@@ -25,13 +25,23 @@ class TestPineconeRerank:
         mock_result1.id = "doc_0"
         mock_result1.index = 0
         mock_result1.score = 0.9
-        mock_result1.document = {"id": "doc_0", "text": "Document 1 content"}
+
+        # Create document object with id attribute and to_dict method
+        doc1 = MagicMock()
+        doc1.id = "doc_0"
+        doc1.to_dict.return_value = {"id": "doc_0", "text": "Document 1 content"}
+        mock_result1.document = doc1
 
         mock_result2 = MagicMock()
         mock_result2.id = "doc_1"
         mock_result2.index = 1
         mock_result2.score = 0.7
-        mock_result2.document = {"id": "doc_1", "text": "Document 2 content"}
+
+        # Create document object with id attribute and to_dict method
+        doc2 = MagicMock()
+        doc2.id = "doc_1"
+        doc2.to_dict.return_value = {"id": "doc_1", "text": "Document 2 content"}
+        mock_result2.document = doc2
 
         mock_response = MagicMock()
         mock_response.data = [mock_result1, mock_result2]
