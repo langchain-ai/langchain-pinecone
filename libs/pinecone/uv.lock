@@ -879,11 +879,10 @@ name = "langchain-pinecone"
 version = "0.2.6"
 source = { editable = "." }
 dependencies = [
-    { name = "aiohttp" },
     { name = "langchain-core" },
     { name = "langchain-tests" },
     { name = "numpy" },
-    { name = "pinecone" },
+    { name = "pinecone", extra = ["asyncio"] },
 ]
 
 [package.dev-dependencies]
@@ -917,11 +916,10 @@ typing = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = ">=3.10,<3.11" },
     { name = "langchain-core", specifier = ">=0.3.34,<1.0.0" },
     { name = "langchain-tests", specifier = ">=0.3.7,<1.0.0" },
     { name = "numpy", specifier = ">=1.26.4" },
-    { name = "pinecone", extras = ["async"], specifier = ">=6.0.0,<7.0.0" },
+    { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<7.0.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1349,6 +1347,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/40/e0/3584dcde7f2cb299b4deb5cc0491f2c9c130c7a72c1d4691fe2c9c3a3613/pinecone-6.0.2.tar.gz", hash = "sha256:9c2e74be8b3abe76909da9b4dae61bced49aade51f6fc39b87edb97a1f8df0e4", size = 175104 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5b/c7/2bc1210aa51528b9ba75aede1f169998f50942cc47cdd82dd2dbcba4faa5/pinecone-6.0.2-py3-none-any.whl", hash = "sha256:a85fa36d7d1451e7b7563ccfc7e3e2dadd39b33e5d53b2882468db8514ab8847", size = 421874 },
+]
+
+[package.optional-dependencies]
+asyncio = [
+    { name = "aiohttp" },
 ]
 
 [[package]]
