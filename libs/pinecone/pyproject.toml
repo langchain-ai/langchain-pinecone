@@ -40,6 +40,7 @@ typing = ["mypy<2.0,>=1.10", "simsimd<6.0.0,>=5.0.0"]
 
 [tool.mypy]
 disallow_untyped_defs = true
+ignore_missing_imports = true
 
 [tool.ruff]
 target-version = "py313"
