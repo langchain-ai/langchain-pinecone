@@ -14,7 +14,7 @@ dependencies = [
     "langchain-tests<1.0.0,>=0.3.7",
 ]
 name = "langchain-pinecone"
-version = "0.2.5"
+version = "0.2.6"
 description = "An integration package connecting Pinecone and LangChain"
 readme = "README.md"
 
