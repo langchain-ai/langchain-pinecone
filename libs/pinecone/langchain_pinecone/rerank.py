@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.utils import secret_from_env
-from pinecone import Pinecone  # type: ignore
+from pinecone import Pinecone
 from pydantic import ConfigDict, Field, SecretStr, model_validator
 from typing_extensions import Self
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class PineconeRerank(BaseDocumentCompressor):
     """Document compressor that uses `Pinecone Rerank API`."""
 
-    client: Any = None
+    client: Optional[Any] = None
     """Pinecone client to use for compressing documents."""
     top_n: Optional[int] = 3
     """Number of documents to return."""
@@ -48,7 +48,9 @@ class PineconeRerank(BaseDocumentCompressor):
                 )
             else:
                 pinecone_api_key = self.pinecone_api_key
+
             self.client = Pinecone(api_key=pinecone_api_key)
+
         elif not isinstance(self.client, object) or not hasattr(
             self.client, "inference"
         ):
@@ -77,13 +79,25 @@ class PineconeRerank(BaseDocumentCompressor):
         index: int,
     ) -> dict:
         if isinstance(document, Document):
-            return {"id": f"doc{index}", "text": document.page_content}
+            doc_id_from_meta = document.metadata.get("id")
+            if isinstance(doc_id_from_meta, str) and doc_id_from_meta:
+                doc_id = doc_id_from_meta
+            else:  # Generate ID if not valid
+                doc_id = f"doc_{index}"
+
+            doc_data = {
+                "id": doc_id,
+                "text": document.page_content,
+                **document.metadata,
+            }
+            return doc_data
         elif isinstance(document, dict):
-            if not document.get("id"):
-                document["id"] = f"doc{index}"
+            current_id = document.get("id")
+            if not isinstance(current_id, str) or not current_id:
+                document["id"] = f"doc_{index}"  # Generate and set ID if not valid
             return document
         else:
-            return {"id": f"doc{index}", "text": document}
+            return {"id": f"doc_{index}", "text": str(document)}
 
     def rerank(
         self,
@@ -178,8 +192,10 @@ class PineconeRerank(BaseDocumentCompressor):
         if len(documents) == 0:  # to avoid empty API call
             return []
 
-        docs = [self._document_to_dict(doc, i) for i, doc in enumerate(documents)]
-        model = model or self.model
+        docs = [
+            self._document_to_dict(document=doc, index=i)
+            for i, doc in enumerate(documents)
+        ]
 
         # Handle rank_fields - Pinecone requires exactly one rank field
         effective_rank_fields = rank_fields or self.rank_fields
@@ -192,11 +208,16 @@ class PineconeRerank(BaseDocumentCompressor):
 
         top_n = top_n if top_n is not None else self.top_n
 
+        model_name = self.model or model or "bge-reranker-v2-m3"
+
         parameters = {"truncate": truncate}
 
         try:
-            results = self.client.inference.rerank(
-                model=model,
+            if self.client is None:
+                raise ValueError("Pinecone client not found. Please provide a client.")
+
+            rerank_result = self.client.inference.rerank(
+                model=model_name,
                 query=query,
                 documents=docs,
                 rank_fields=rank_field,
@@ -205,37 +226,16 @@ class PineconeRerank(BaseDocumentCompressor):
                 parameters=parameters,
             )
 
-            # Handle potential change in result format based on Pinecone API docs
-            if hasattr(results, "data"):
-                # New API format with results.data containing the actual results
-                result_data = results.data
-            else:
-                # Fallback if results is already a list
-                result_data = results if isinstance(results, list) else [results]
-
-            # Create a mapping from document ID to original index
-            id_to_index = {doc["id"]: i for i, doc in enumerate(docs)}
-
             result_dicts = []
-            for res in result_data:
-                # The returned index might be directly usable, but we'll validate it
-                doc_id = getattr(res, "id", None)
-                doc_index = getattr(res, "index", None)
-
-                # If index wasn't returned directly but we have an ID, look it up
-                if doc_index is None and doc_id is not None:
-                    doc_index = id_to_index.get(doc_id)
-
+            for result_item_data in rerank_result.data:
                 result_dict = {
-                    "id": doc_id or res.id,
-                    "index": doc_index
-                    if doc_index is not None
-                    else id_to_index.get(res.id),
-                    "score": res.score,
+                    "id": result_item_data.document.id,
+                    "index": result_item_data.index,
+                    "score": result_item_data.score,
                 }
 
-                if hasattr(res, "document") and res.document:
-                    result_dict["document"] = res.document
+                if self.return_documents:
+                    result_dict["document"] = result_item_data.document.to_dict()
 
                 result_dicts.append(result_dict)
 
