@@ -251,7 +251,9 @@ class PineconeVectorStore(VectorStore):
             client = PineconeAsyncioClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
             )
-            return client.IndexAsyncio(host=self.index.config.host)
+            index =  client.IndexAsyncio(host=self.index.config.host)
+            asyncio.create_task(client.close())
+            return index
         return self._async_index
 
     @property
