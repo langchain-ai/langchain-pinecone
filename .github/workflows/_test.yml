@@ -43,13 +43,13 @@ jobs:
         run: |
           make test
 
-      # - name: Run integration tests
-      #   shell: bash
-      #   env:
-      #     PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-      #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      #   run: |
-      #     make integration_test
+      - name: Run integration tests
+        shell: bash
+        env:
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          make integration_test
 
       - name: Ensure the tests did not create any additional files
         shell: bash
