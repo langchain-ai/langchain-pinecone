@@ -358,3 +358,46 @@ class TestPineconeRerank:
         for res in results:
             assert isinstance(res["score"], float)
         assert all(res["id"] is not None for res in results)
+
+    def test_rerank_excludes_truncate_for_cohere_model(
+        self, mock_pinecone_client: MagicMock, mock_rerank_response: MagicMock
+    ) -> None:
+        """Test rerank excludes 'truncate' parameter for 'cohere-rerank-3.5' model."""
+        mock_pinecone_client.inference.rerank.return_value = mock_rerank_response
+
+        reranker = PineconeRerank(
+            client=mock_pinecone_client,
+            model="cohere-rerank-3.5",
+            top_n=2,
+            rank_fields=["text"],
+            return_documents=True,
+        )
+        documents = ["doc_1 content", "doc_2 content", "doc_3 content"]
+        query = "test query"
+
+        results = reranker.rerank(documents, query)
+
+        mock_pinecone_client.inference.rerank.assert_called_once_with(
+            model="cohere-rerank-3.5",
+            query=query,
+            documents=[
+                {"id": "doc_0", "text": "doc_1 content"},
+                {"id": "doc_1", "text": "doc_2 content"},
+                {"id": "doc_2", "text": "doc_3 content"},
+            ],
+            rank_fields=["text"],
+            top_n=2,
+            return_documents=True,
+            parameters={},  # Ensure 'truncate' is not included
+        )
+
+        assert len(results) == 2
+        assert results[0]["id"] == "doc_0"
+        assert results[0]["score"] == 0.9
+        assert results[0]["index"] == 0
+        assert results[0]["document"] == {"id": "doc_0", "text": "Document 1 content"}
+
+        assert results[1]["id"] == "doc_1"
+        assert results[1]["score"] == 0.7
+        assert results[1]["index"] == 1
+        assert results[1]["document"] == {"id": "doc_1", "text": "Document 2 content"}

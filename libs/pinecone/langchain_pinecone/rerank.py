@@ -210,7 +210,10 @@ class PineconeRerank(BaseDocumentCompressor):
 
         model_name = self.model or model or "bge-reranker-v2-m3"
 
-        parameters = {"truncate": truncate}
+        parameters = {}
+        # Only include truncate parameter for models that support it
+        if model_name != "cohere-rerank-3.5":
+            parameters["truncate"] = truncate
 
         try:
             if self.client is None:
