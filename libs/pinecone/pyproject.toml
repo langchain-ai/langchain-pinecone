@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=1.26.4",
     "langchain-tests<1.0.0,>=0.3.7",
     "langchain-openai>=0.3.11",
+    "pytest[async,asyncio]>=8.3.5",
 ]
 name = "langchain-pinecone"
 version = "0.2.6"
