@@ -98,6 +98,14 @@ class PineconeRerank(BaseDocumentCompressor):
         else:
             return {"id": f"doc_{index}", "text": str(document)}
 
+    def _rerank_params(self, model: str, truncate: str) -> dict:
+        """Returns the parameters for the rerank API call."""
+        parameters = {}
+        # Only include truncate parameter for models that support it
+        if model != "cohere-rerank-3.5":
+            parameters["truncate"] = truncate
+        return parameters
+
     def rerank(
         self,
         documents: Sequence[Union[str, Document, dict]],
@@ -133,7 +141,7 @@ class PineconeRerank(BaseDocumentCompressor):
                 rank_fields=rank_fields or self.rank_fields or ["text"],
                 top_n=top_n or self.top_n,
                 return_documents=self.return_documents,
-                parameters={"truncate": truncate},
+                parameters=self._rerank_params(model=model_to_use, truncate=truncate),
             )
 
             result_dicts = []
@@ -169,11 +177,6 @@ class PineconeRerank(BaseDocumentCompressor):
         if len(documents) == 0:  # to avoid empty API call
             return []
 
-        parameters = {}
-        # Only include truncate parameter for models that support it
-        if model != "cohere-rerank-3.5":
-            parameters["truncate"] = truncate
-
         docs = [
             self._document_to_dict(document=doc, index=i)
             for i, doc in enumerate(documents)
@@ -194,7 +197,7 @@ class PineconeRerank(BaseDocumentCompressor):
                 rank_fields=rank_fields or self.rank_fields or ["text"],
                 top_n=top_n or self.top_n,
                 return_documents=self.return_documents,
-                parameters={"truncate": truncate},
+                parameters=self._rerank_params(model=model_to_use, truncate=truncate),
             )
 
             result_dicts = []
