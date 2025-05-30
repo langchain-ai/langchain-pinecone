@@ -171,7 +171,7 @@ class PineconeRerank(BaseDocumentCompressor):
 
         parameters = {}
         # Only include truncate parameter for models that support it
-        if model_name != "cohere-rerank-3.5":
+        if model != "cohere-rerank-3.5":
             parameters["truncate"] = truncate
 
         docs = [

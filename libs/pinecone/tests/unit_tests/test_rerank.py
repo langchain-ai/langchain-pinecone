@@ -12,12 +12,12 @@ from langchain_pinecone.rerank import PineconeRerank
 
 # helper function for testing shared assertions in later rerank tests
 def check_rerank_call_and_results(
-    mock_client,
-    mock_rerank_response,
-    expected_model,
-    expected_parameters,
-    results,
-):
+    mock_client: MagicMock,
+    mock_rerank_response: MagicMock,
+    expected_model: str,
+    expected_parameters: Dict[str, Any],
+    results: list[dict[str, Any]],
+) -> None:
     mock_client.inference.rerank.assert_called_once_with(
         model=expected_model,
         query="test query",
@@ -215,16 +215,17 @@ class TestPineconeRerank:
     @pytest.mark.parametrize(
         "model,expected_parameters",
         [
-            ("cohere-rerank-3.5", {}),             # Test 'cohere' disables 'truncate'
-            ("test-model", {"truncate": "END"}),   # Test default includes 'truncate'
+            ("cohere-rerank-3.5", {}),  # Test 'cohere' disables 'truncate'
+            ("test-model", {"truncate": "END"}),  # Test default includes 'truncate'
         ],
     )
     def test_rerank_models(
+        self,
         mock_pinecone_client: MagicMock,
         mock_rerank_response: MagicMock,
-        model,
-        expected_parameters,
-    ):
+        model: str,
+        expected_parameters: Dict[str, Any],
+    ) -> None:
         mock_pinecone_client.inference.rerank.return_value = mock_rerank_response
         reranker = PineconeRerank(
             client=mock_pinecone_client,
@@ -436,16 +437,17 @@ class TestPineconeRerank:
     @pytest.mark.parametrize(
         "model,expected_parameters",
         [
-            ("cohere-rerank-3.5", {}),             # Test 'cohere' disables 'truncate'
-            ("test-model", {"truncate": "END"}),   # Test default includes 'truncate'
+            ("cohere-rerank-3.5", {}),  # Test 'cohere' disables 'truncate'
+            ("test-model", {"truncate": "END"}),  # Test default includes 'truncate'
         ],
     )
     async def test_arerank_models(
+        self,
         mock_pinecone_async_client: MagicMock,
         mock_rerank_response: MagicMock,
-        model,
-        expected_parameters,
-    ):
+        model: str,
+        expected_parameters: Dict[str, Any],
+    ) -> None:
         mock_pinecone_async_client.inference.rerank.return_value = mock_rerank_response
         reranker = PineconeRerank(
             async_client=mock_pinecone_async_client,
