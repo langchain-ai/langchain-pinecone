@@ -386,6 +386,47 @@ class PineconeVectorStore(VectorStore):
                 await asyncio.gather(*tasks)
 
         return ids
+    
+    def similarity_search_by_vector(
+        self,
+        embedding: List[float],
+        *,
+        k: int = 4,
+        filter: Optional[dict] = None,
+        namespace: Optional[str] = None,
+    ) -> List[Document]:
+        """Return documents most similar to the given embedding vector.
+
+        Wraps `similarity_search_by_vector_with_score` but strips the scores.
+        """
+        docs_and_scores = self.similarity_search_by_vector_with_score(
+            embedding=embedding,
+            k=k,
+            filter=filter,
+            namespace=namespace
+        )
+        return [doc for doc, _ in docs_and_scores]
+
+    async def asimilarity_search_by_vector(
+        self,
+        embedding: List[float],
+        *,
+        k: int = 4,
+        filter: Optional[dict] = None,
+        namespace: Optional[str] = None,
+    ) -> List[Document]:
+        """Return documents most similar to the given embedding vector asynchronously.
+
+        Wraps `asimilarity_search_by_vector_with_score` but strips the scores.
+        """
+        docs_and_scores = await self.asimilarity_search_by_vector_with_score(
+            embedding=embedding,
+            k=k,
+            filter=filter,
+            namespace=namespace
+        )
+        return [doc for doc, _ in docs_and_scores]
+
 
     def similarity_search_with_score(
         self,
