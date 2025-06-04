@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from typing import AsyncGenerator
 
 import pytest
@@ -10,7 +11,8 @@ from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 from tests.integration_tests.test_vectorstores import DEFAULT_SLEEP
 
 DIMENSION = 1024
-INDEX_NAME = "langchain-pinecone-embeddings"
+# unique name of the index for this test run
+INDEX_NAME = f"langchain-test-embeddings-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 MODEL = "multilingual-e5-large"
 SPARSE_MODEL_NAME = "pinecone-sparse-english-v0"
 NAMESPACE_NAME = "test_namespace"

@@ -2,6 +2,7 @@ import asyncio
 import os
 import time
 import uuid
+from datetime import datetime
 from typing import List
 
 import numpy as np
@@ -15,7 +16,8 @@ from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
 from langchain_pinecone import PineconeVectorStore
 
-INDEX_NAME = "langchain-test-index"  # name of the index
+# unique name of the index for this test run
+INDEX_NAME = f"langchain-test-vectorstores-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 NAMESPACE_NAME = "langchain-test-namespace"  # name of the namespace
 DIMENSION = 1536  # dimension of the embeddings
 
