@@ -884,7 +884,6 @@ dependencies = [
     { name = "langchain-tests" },
     { name = "numpy" },
     { name = "pinecone", extra = ["asyncio"] },
-    { name = "pytest" },
 ]
 
 [package.dev-dependencies]
@@ -923,7 +922,6 @@ requires-dist = [
     { name = "langchain-tests", specifier = ">=0.3.7,<1.0.0" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
-    { name = "pytest", extras = ["async", "asyncio"], specifier = ">=8.3.5" },
 ]
 
 [package.metadata.requires-dev]

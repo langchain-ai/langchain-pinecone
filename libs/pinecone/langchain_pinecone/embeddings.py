@@ -8,9 +8,7 @@ from pinecone import (
     PineconeAsyncio as PineconeAsyncioClient,  # type: ignore[import-untyped]
 )
 from pinecone import SparseValues
-from pinecone.data.features.inference.inference import (  # type: ignore[import-untyped]
-    EmbeddingsList,
-)
+from pinecone.core.openapi.inference.model.embeddings_list import EmbeddingsList
 from pydantic import (
     BaseModel,
     ConfigDict,
