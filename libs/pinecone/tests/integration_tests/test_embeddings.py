@@ -1,10 +1,12 @@
+import os
 import time
 from datetime import datetime
 from typing import AsyncGenerator
 
+import pinecone
 import pytest
 from langchain_core.documents import Document
-from pinecone import SparseValues
+from pinecone import ServerlessSpec, SparseValues
 
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
@@ -68,6 +70,18 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
 
 
 def test_vector_store(embd_client: PineconeEmbeddings) -> None:
+    # setup index if it doesn't exist
+    pc = pinecone.init(api_key=os.environ["PINECONE_API_KEY"])
+    if INDEX_NAME not in [index["name"] for index in pc.list_indexes()]:
+        pc.create_index(
+            name=INDEX_NAME,
+            dimension=DIMENSION,
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+        )
+        while not pc.describe_index(INDEX_NAME).status["ready"]:
+            time.sleep(1)
+    # now test connecting directly and adding docs
     vectorstore = PineconeVectorStore(index_name=INDEX_NAME, embedding=embd_client)
     vectorstore.add_documents(
         [Document("Hello, world!"), Document("This is a test.")],
@@ -76,3 +90,5 @@ def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     time.sleep(DEFAULT_SLEEP)  # Increase wait time to ensure indexing is complete
     resp = vectorstore.similarity_search(query="hello", namespace=NAMESPACE_NAME)
     assert len(resp) == 2
+    # delete index
+    pc.delete_index(INDEX_NAME)
