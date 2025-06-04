@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.9, <3.14"
 resolution-markers = [
     "python_full_version == '3.11.*'",
@@ -875,7 +876,7 @@ wheels = [
 
 [[package]]
 name = "langchain-pinecone"
-version = "0.2.6"
+version = "0.2.7"
 source = { editable = "." }
 dependencies = [
     { name = "langchain-core" },
@@ -921,7 +922,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=0.3.11" },
     { name = "langchain-tests", specifier = ">=0.3.7,<1.0.0" },
     { name = "numpy", specifier = ">=1.26.4" },
-    { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<7.0.0" },
+    { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
     { name = "pytest", extras = ["async", "asyncio"], specifier = ">=8.3.5" },
 ]
 

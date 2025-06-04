@@ -8,14 +8,14 @@ license = { text = "MIT" }
 requires-python = "<3.14,>=3.9"
 dependencies = [
     "langchain-core<1.0.0,>=0.3.34",
-    "pinecone[asyncio]>=6.0.0,<7.0.0",
+    "pinecone[asyncio]>=6.0.0,<8.0.0",
     "numpy>=1.26.4",
     "langchain-tests<1.0.0,>=0.3.7",
     "langchain-openai>=0.3.11",
     "pytest[async,asyncio]>=8.3.5",
 ]
 name = "langchain-pinecone"
-version = "0.2.6"
+version = "0.2.7"
 description = "An integration package connecting Pinecone and LangChain"
 readme = "README.md"
 
