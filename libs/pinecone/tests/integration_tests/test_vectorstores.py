@@ -11,7 +11,7 @@ import pytest  # type: ignore[import-not-found]
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings  # type: ignore[import-not-found]
 from langchain_tests.integration_tests.vectorstores import VectorStoreIntegrationTests
-from pinecone import ServerlessSpec
+from pinecone import AwsRegion, CloudProvider, Metric, ServerlessSpec
 from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
 from langchain_pinecone import PineconeVectorStore
@@ -33,17 +33,17 @@ class TestPinecone(VectorStoreIntegrationTests):
         import pinecone
 
         client = pinecone.Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-        index_list = client.list_indexes()
-        if INDEX_NAME in [
-            i["name"] for i in index_list
-        ]:  # change to list comprehension
+        if client.has_index(name=INDEX_NAME):  # change to list comprehension
             client.delete_index(INDEX_NAME)
             time.sleep(DEFAULT_SLEEP)  # prevent race with subsequent creation
         client.create_index(
             name=INDEX_NAME,
             dimension=DIMENSION,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-west-2"),
+            metric=Metric.COSINE,
+            spec=ServerlessSpec(
+                cloud=CloudProvider.AWS,
+                region=AwsRegion.US_WEST_2
+            ),
         )
 
         self.index = client.Index(INDEX_NAME)

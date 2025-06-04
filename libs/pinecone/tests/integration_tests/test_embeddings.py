@@ -5,7 +5,14 @@ from typing import AsyncGenerator
 
 import pytest
 from langchain_core.documents import Document
-from pinecone import Pinecone, ServerlessSpec, SparseValues
+from pinecone import (
+    AwsRegion,
+    CloudProvider,
+    Metric,
+    Pinecone,
+    ServerlessSpec,
+    SparseValues,
+)
 
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
@@ -71,12 +78,15 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
 def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     # setup index if it doesn't exist
     pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-    if INDEX_NAME not in [index["name"] for index in pc.list_indexes()]:
+    if not pc.has_index(name=INDEX_NAME):
         pc.create_index(
             name=INDEX_NAME,
             dimension=DIMENSION,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+            metric=Metric.COSINE,
+            spec=ServerlessSpec(
+                cloud=CloudProvider.AWS,
+                region=AwsRegion.US_WEST_2
+            ),
         )
         while not pc.describe_index(INDEX_NAME).status["ready"]:
             time.sleep(1)
