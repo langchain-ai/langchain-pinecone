@@ -56,7 +56,6 @@ class TestPinecone(VectorStoreIntegrationTests):
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         # delete all the vectors in the index
-        print("called")  # noqa: T201
         index_stats = self.index.describe_index_stats()
         if index_stats["total_vector_count"] > 0:
             try:

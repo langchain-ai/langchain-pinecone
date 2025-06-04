@@ -3,10 +3,9 @@ import time
 from datetime import datetime
 from typing import AsyncGenerator
 
-import pinecone
 import pytest
 from langchain_core.documents import Document
-from pinecone import ServerlessSpec, SparseValues
+from pinecone import Pinecone, ServerlessSpec, SparseValues
 
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
@@ -71,7 +70,7 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
 
 def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     # setup index if it doesn't exist
-    pc = pinecone.init(api_key=os.environ["PINECONE_API_KEY"])
+    pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
     if INDEX_NAME not in [index["name"] for index in pc.list_indexes()]:
         pc.create_index(
             name=INDEX_NAME,
