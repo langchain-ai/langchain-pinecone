@@ -137,6 +137,8 @@ jobs:
         #   sometimes a delay in availability on test pypi
         run: |
           uv venv
+          # Sync dependencies first to ensure all requirements are available
+          uv sync --no-dev
           VIRTUAL_ENV=.venv uv pip install dist/*.whl
 
           # Replace all dashes in the package name with underscores,
