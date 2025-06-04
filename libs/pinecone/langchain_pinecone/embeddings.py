@@ -113,8 +113,8 @@ class PineconeEmbeddings(BaseModel, Embeddings):
         default_config_map = {
             "multilingual-e5-large": {
                 "batch_size": 96,
-                "query_params": {"input_type": "query", "truncation": "END"},
-                "document_params": {"input_type": "passage", "truncation": "END"},
+                "query_params": {"input_type": "query", "truncate": "END"},
+                "document_params": {"input_type": "passage", "truncate": "END"},
                 "dimension": 1024,
             },
         }
@@ -294,8 +294,8 @@ class PineconeSparseEmbeddings(PineconeEmbeddings):
         default_config_map = {
             "pinecone-sparse-english-v0": {
                 "batch_size": 96,
-                "query_params": {"input_type": "query", "truncation": "END"},
-                "document_params": {"input_type": "passage", "truncation": "END"},
+                "query_params": {"input_type": "query", "truncate": "END"},
+                "document_params": {"input_type": "passage", "truncate": "END"},
                 "dimension": None,
             },
         }
