@@ -77,15 +77,15 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
 def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     # setup index if it doesn't exist
     pc = Pinecone()
-    if not pc.has_index(name=INDEX_NAME):
-        pc.create_index(
-            name=INDEX_NAME,
-            dimension=DIMENSION,
-            metric=Metric.COSINE,
-            spec=ServerlessSpec(cloud=CloudProvider.AWS, region=AwsRegion.US_WEST_2),
-        )
-        while not pc.describe_index(INDEX_NAME).status["ready"]:
-            time.sleep(1)
+    if pc.has_index(name=INDEX_NAME):  # change to list comprehension
+        pc.delete_index(INDEX_NAME)
+        time.sleep(DEFAULT_SLEEP)  # prevent race with subsequent creation
+    pc.create_index(
+        name=INDEX_NAME,
+        dimension=DIMENSION,
+        metric=Metric.COSINE,
+        spec=ServerlessSpec(cloud=CloudProvider.AWS, region=AwsRegion.US_WEST_2),
+    )
     # now test connecting directly and adding docs
     vectorstore = PineconeVectorStore(index_name=INDEX_NAME, embedding=embd_client)
     vectorstore.add_documents(
