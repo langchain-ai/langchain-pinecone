@@ -18,6 +18,9 @@ from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 from tests.integration_tests.test_vectorstores import DEFAULT_SLEEP
 
+if "PINECONE_ENVIRONMENT" in os.environ:
+    del os.environ["PINECONE_ENVIRONMENT"]
+    
 DIMENSION = 1024
 # unique name of the index for this test run
 INDEX_NAME = f"langchain-test-embeddings-{datetime.now().strftime('%Y%m%d%H%M%S')}"

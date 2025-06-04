@@ -16,6 +16,9 @@ from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
 from langchain_pinecone import PineconeVectorStore
 
+if "PINECONE_ENVIRONMENT" in os.environ:
+    del os.environ["PINECONE_ENVIRONMENT"]
+
 # unique name of the index for this test run
 INDEX_NAME = f"langchain-test-vectorstores-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 NAMESPACE_NAME = "langchain-test-namespace"  # name of the namespace
