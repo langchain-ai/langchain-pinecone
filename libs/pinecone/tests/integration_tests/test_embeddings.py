@@ -83,10 +83,7 @@ def test_vector_store(embd_client: PineconeEmbeddings) -> None:
             name=INDEX_NAME,
             dimension=DIMENSION,
             metric=Metric.COSINE,
-            spec=ServerlessSpec(
-                cloud=CloudProvider.AWS,
-                region=AwsRegion.US_WEST_2
-            ),
+            spec=ServerlessSpec(cloud=CloudProvider.AWS, region=AwsRegion.US_WEST_2),
         )
         while not pc.describe_index(INDEX_NAME).status["ready"]:
             time.sleep(1)

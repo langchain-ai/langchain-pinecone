@@ -40,10 +40,7 @@ class TestPinecone(VectorStoreIntegrationTests):
             name=INDEX_NAME,
             dimension=DIMENSION,
             metric=Metric.COSINE,
-            spec=ServerlessSpec(
-                cloud=CloudProvider.AWS,
-                region=AwsRegion.US_WEST_2
-            ),
+            spec=ServerlessSpec(cloud=CloudProvider.AWS, region=AwsRegion.US_WEST_2),
         )
 
         self.index = client.Index(INDEX_NAME)
