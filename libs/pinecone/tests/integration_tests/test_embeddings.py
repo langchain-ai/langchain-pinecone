@@ -1,3 +1,4 @@
+import os
 import time
 from datetime import datetime
 from typing import AsyncGenerator
@@ -9,6 +10,10 @@ from pinecone import Pinecone, ServerlessSpec, SparseValues  # type: ignore
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 from tests.integration_tests.test_vectorstores import DEFAULT_SLEEP
+
+if "PINECONE_ENVIRONMENT" in os.environ:
+    # overwrite the env var as it seems the org has set `gcp-starter` which is deprecated
+    del os.environ["PINECONE_ENVIRONMENT"]
 
 DIMENSION = 1024
 # unique name of the index for this test run
