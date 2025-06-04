@@ -1,19 +1,15 @@
-import os
 import time
 from datetime import datetime
 from typing import AsyncGenerator
 
 import pytest
 from langchain_core.documents import Document
-from pinecone import Pinecone, ServerlessSpec, SparseValues  # type: ignore
+from pinecone import SparseValues
 
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 from tests.integration_tests.test_vectorstores import DEFAULT_SLEEP
 
-if "PINECONE_ENVIRONMENT" in os.environ:
-    # overwrite the env var as it seems the org has set `gcp-starter` which is deprecated
-    del os.environ["PINECONE_ENVIRONMENT"]
 
 DIMENSION = 1024
 # unique name of the index for this test run
@@ -35,28 +31,6 @@ async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]
     client = PineconeSparseEmbeddings(model=SPARSE_MODEL_NAME)
     yield client
     await client.async_client.close()
-
-
-@pytest.fixture
-def pc() -> Pinecone:
-    return Pinecone()
-
-
-@pytest.fixture()
-def pc_index(pc: Pinecone) -> Pinecone.Index:
-    if INDEX_NAME not in [index["name"] for index in pc.list_indexes()]:
-        pc.create_index(
-            name=INDEX_NAME,
-            dimension=DIMENSION,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-        )
-        while not pc.describe_index(INDEX_NAME).status["ready"]:
-            time.sleep(1)
-
-    yield pc.Index(INDEX_NAME)
-
-    pc.delete_index(INDEX_NAME)
 
 
 def test_embed_query(embd_client: PineconeEmbeddings) -> None:
@@ -94,9 +68,7 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
     assert len(out[0]) == DIMENSION
 
 
-def test_vector_store(
-    embd_client: PineconeEmbeddings, pc_index: Pinecone.Index
-) -> None:
+def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     vectorstore = PineconeVectorStore(index_name=INDEX_NAME, embedding=embd_client)
     vectorstore.add_documents(
         [Document("Hello, world!"), Document("This is a test.")],
