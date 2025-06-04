@@ -1,4 +1,3 @@
-import os
 import time
 from datetime import datetime
 from typing import AsyncGenerator
@@ -18,9 +17,6 @@ from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 from tests.integration_tests.test_vectorstores import DEFAULT_SLEEP
 
-if "PINECONE_ENVIRONMENT" in os.environ:
-    del os.environ["PINECONE_ENVIRONMENT"]
-    
 DIMENSION = 1024
 # unique name of the index for this test run
 INDEX_NAME = f"langchain-test-embeddings-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -80,7 +76,7 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
 
 def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     # setup index if it doesn't exist
-    pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+    pc = Pinecone()
     if not pc.has_index(name=INDEX_NAME):
         pc.create_index(
             name=INDEX_NAME,

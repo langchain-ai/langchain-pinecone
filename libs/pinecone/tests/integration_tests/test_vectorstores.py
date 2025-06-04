@@ -1,5 +1,4 @@
 import asyncio
-import os
 import time
 import uuid
 from datetime import datetime
@@ -15,9 +14,6 @@ from pinecone import AwsRegion, CloudProvider, Metric, ServerlessSpec
 from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
 from langchain_pinecone import PineconeVectorStore
-
-if "PINECONE_ENVIRONMENT" in os.environ:
-    del os.environ["PINECONE_ENVIRONMENT"]
 
 # unique name of the index for this test run
 INDEX_NAME = f"langchain-test-vectorstores-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -35,7 +31,8 @@ class TestPinecone(VectorStoreIntegrationTests):
     def setup_class(self) -> None:
         import pinecone
 
-        client = pinecone.Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+        client = pinecone.Pinecone()
+        print(f"client: {client}")  # noqa: T201
         if client.has_index(name=INDEX_NAME):  # change to list comprehension
             client.delete_index(INDEX_NAME)
             time.sleep(DEFAULT_SLEEP)  # prevent race with subsequent creation
