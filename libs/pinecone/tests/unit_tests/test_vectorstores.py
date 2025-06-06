@@ -88,6 +88,69 @@ def test_sparse_vectorstore__raises_on_dense_embedding(mocker: MockerFixture) ->
         PineconeSparseVectorStore(embedding=mocker.Mock(spec=PineconeEmbeddings))
 
 
+def test_host_parameter_avoids_sync_index_creation(mocker: MockerFixture) -> None:
+    """Test that providing host parameter avoids creating unnecessary sync index."""
+    mock_embedding = mocker.AsyncMock()
+
+    # Mock PineconeClient to ensure it's NOT called when host is provided
+    mock_pinecone_client = mocker.patch(
+        "langchain_pinecone.vectorstores.PineconeClient"
+    )
+
+    # Create vectorstore with host parameter
+    vectorstore = PineconeVectorStore(
+        pinecone_api_key="test-key",
+        index_name="test-index",
+        host="direct-host.pinecone.io",
+        embedding=mock_embedding,
+        text_key="text",
+    )
+
+    # Verify that PineconeClient was NOT called since host was provided
+    mock_pinecone_client.assert_not_called()
+
+    # Verify host is properly cached
+    assert vectorstore._index_host == "direct-host.pinecone.io"
+
+    # Verify that _index is None since no sync index was created
+    assert vectorstore._index is None
+
+
+def test_async_index_uses_cached_host_without_sync_calls(mocker: MockerFixture) -> None:
+    """Test that async_index uses cached host without making sync calls."""
+    mock_embedding = mocker.AsyncMock()
+
+    # Mock async client
+    mock_async_client = mocker.patch(
+        "langchain_pinecone.vectorstores.PineconeAsyncioClient"
+    )
+    mock_async_index = mocker.AsyncMock()
+    mock_async_client.return_value.IndexAsyncio.return_value = mock_async_index
+
+    # Create vectorstore with host parameter (avoids sync index creation)
+    vectorstore = PineconeVectorStore(
+        pinecone_api_key="test-key",
+        index_name="test-index",
+        host="cached-host.pinecone.io",
+        embedding=mock_embedding,
+        text_key="text",
+    )
+
+    # Access async_index property
+    result = vectorstore.async_index
+
+    # Verify async client was called with the cached host
+    mock_async_client.return_value.IndexAsyncio.assert_called_once_with(
+        host="cached-host.pinecone.io"
+    )
+
+    # Verify result is the mock async index
+    assert result == mock_async_index
+
+    # Verify no sync index was created or accessed
+    assert vectorstore._index is None
+
+
 @pytest.mark.parametrize(
     "vectorstore_cls,mock_embedding_obj",
     [
