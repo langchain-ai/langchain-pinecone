@@ -190,6 +190,7 @@ class PineconeVectorStore(VectorStore):
         *,
         pinecone_api_key: Optional[str] = None,
         index_name: Optional[str] = None,
+        host: Optional[str] = None,
     ):
         if embedding is None:
             raise ValueError("Embedding must be provided")
@@ -221,6 +222,9 @@ class PineconeVectorStore(VectorStore):
                 )
             self._pinecone_api_key = _pinecone_api_key
 
+            # Store the host parameter or get from environment variable
+            self._index_host = host or os.environ.get("PINECONE_HOST")
+
             _index_name = index_name or os.environ.get("PINECONE_INDEX_NAME") or ""
             if not _index_name:
                 raise ValueError(
@@ -229,8 +233,14 @@ class PineconeVectorStore(VectorStore):
                 )
             self._pinecone_api_key = _pinecone_api_key
 
-            client = PineconeClient(api_key=_pinecone_api_key, source_tag="langchain")
-            self._index = client.Index(name=_index_name)
+            # Only create sync index if no host is provided
+            if not self._index_host:
+                client = PineconeClient(
+                    api_key=_pinecone_api_key, source_tag="langchain"
+                )
+                self._index = client.Index(name=_index_name)
+                # Cache host from the created index
+                self._index_host = self._index.config.host
 
     @property
     def index(self) -> _Index:
@@ -251,7 +261,14 @@ class PineconeVectorStore(VectorStore):
             client = PineconeAsyncioClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
             )
-            return client.IndexAsyncio(host=self.index.config.host)
+            # Priority: constructor parameter → cached host → environment variable
+            host = self._index_host
+            if not host:
+                raise ValueError(
+                    "Index host must be available either from cached index, "
+                    "PINECONE_HOST environment variable, or host parameter"
+                )
+            return client.IndexAsyncio(host=host)
         return self._async_index
 
     @property
