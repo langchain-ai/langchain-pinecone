@@ -1,16 +1,25 @@
 import time
+from datetime import datetime
 from typing import AsyncGenerator
 
 import pytest
 from langchain_core.documents import Document
-from pinecone import Pinecone, ServerlessSpec, SparseValues  # type: ignore
+from pinecone import (
+    AwsRegion,
+    CloudProvider,
+    Metric,
+    Pinecone,
+    ServerlessSpec,
+    SparseValues,
+)
 
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
 from tests.integration_tests.test_vectorstores import DEFAULT_SLEEP
 
 DIMENSION = 1024
-INDEX_NAME = "langchain-pinecone-embeddings"
+# unique name of the index for this test run
+INDEX_NAME = f"langchain-test-embeddings-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 MODEL = "multilingual-e5-large"
 SPARSE_MODEL_NAME = "pinecone-sparse-english-v0"
 NAMESPACE_NAME = "test_namespace"
@@ -28,28 +37,6 @@ async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]
     client = PineconeSparseEmbeddings(model=SPARSE_MODEL_NAME)
     yield client
     await client.async_client.close()
-
-
-@pytest.fixture
-def pc() -> Pinecone:
-    return Pinecone()
-
-
-@pytest.fixture()
-def pc_index(pc: Pinecone) -> Pinecone.Index:
-    if INDEX_NAME not in [index["name"] for index in pc.list_indexes()]:
-        pc.create_index(
-            name=INDEX_NAME,
-            dimension=DIMENSION,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-        )
-        while not pc.describe_index(INDEX_NAME).status["ready"]:
-            time.sleep(1)
-
-    yield pc.Index(INDEX_NAME)
-
-    pc.delete_index(INDEX_NAME)
 
 
 def test_embed_query(embd_client: PineconeEmbeddings) -> None:
@@ -87,9 +74,19 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
     assert len(out[0]) == DIMENSION
 
 
-def test_vector_store(
-    embd_client: PineconeEmbeddings, pc_index: Pinecone.Index
-) -> None:
+def test_vector_store(embd_client: PineconeEmbeddings) -> None:
+    # setup index if it doesn't exist
+    pc = Pinecone()
+    if pc.has_index(name=INDEX_NAME):  # change to list comprehension
+        pc.delete_index(INDEX_NAME)
+        time.sleep(DEFAULT_SLEEP)  # prevent race with subsequent creation
+    pc.create_index(
+        name=INDEX_NAME,
+        dimension=DIMENSION,
+        metric=Metric.COSINE,
+        spec=ServerlessSpec(cloud=CloudProvider.AWS, region=AwsRegion.US_WEST_2),
+    )
+    # now test connecting directly and adding docs
     vectorstore = PineconeVectorStore(index_name=INDEX_NAME, embedding=embd_client)
     vectorstore.add_documents(
         [Document("Hello, world!"), Document("This is a test.")],
@@ -98,3 +95,5 @@ def test_vector_store(
     time.sleep(DEFAULT_SLEEP)  # Increase wait time to ensure indexing is complete
     resp = vectorstore.similarity_search(query="hello", namespace=NAMESPACE_NAME)
     assert len(resp) == 2
+    # delete index
+    pc.delete_index(INDEX_NAME)

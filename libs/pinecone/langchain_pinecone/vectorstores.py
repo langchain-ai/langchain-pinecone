@@ -21,10 +21,17 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils.iter import batch_iterate
 from langchain_core.vectorstores import VectorStore
-from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
+from pinecone import Pinecone as PineconeClient
 from pinecone import PineconeAsyncio as PineconeAsyncioClient
-from pinecone.data import _Index, _IndexAsyncio  # type: ignore[import-untyped]
-from pinecone.data.index import ApplyResult  # type: ignore[import-untyped]
+
+# conditional imports based on pinecone version
+try:
+    from pinecone.db_data.index import ApplyResult
+    from pinecone.db_data.index import Index as _Index
+    from pinecone.db_data.index_asyncio import _IndexAsyncio
+except ImportError:
+    from pinecone.data import _Index, _IndexAsyncio
+    from pinecone.data.index import ApplyResult
 
 from langchain_pinecone._utilities import DistanceStrategy, maximal_marginal_relevance
 
