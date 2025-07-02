@@ -124,6 +124,12 @@ class PineconeEmbeddings(BaseModel, Embeddings):
                 "document_params": {"input_type": "passage", "truncate": "END"},
                 "dimension": 1024,
             },
+            "llama-text-embed-v2": {
+                "batch_size": 96,
+                "query_params": {"input_type": "query", "truncate": "END"},
+                "document_params": {"input_type": "passage", "truncate": "END"},
+                "dimension": 1024,
+            },
         }
         model = values.get("model")
         if model in default_config_map:
