@@ -35,7 +35,8 @@ requires_api_key = pytest.mark.skipif(
 async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
     client = PineconeEmbeddings(
         model=MODEL,
-        pinecone_api_key=os.environ.get("PINECONE_API_KEY")
+        pinecone_api_key=os.environ.get("PINECONE_API_KEY", ""),
+        dimension=DIMENSION
     )
     yield client
     await client.async_client.close()
@@ -45,12 +46,14 @@ async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
 async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]:
     client = PineconeSparseEmbeddings(
         model=SPARSE_MODEL_NAME,
-        pinecone_api_key=os.environ.get("PINECONE_API_KEY")
+        pinecone_api_key=os.environ.get("PINECONE_API_KEY", ""),
+        dimension=DIMENSION
     )
     yield client
     await client.async_client.close()
 
 
+@requires_api_key
 def test_embed_query(embd_client: PineconeEmbeddings) -> None:
     out = embd_client.embed_query("Hello, world!")
     assert isinstance(out, list)
@@ -89,6 +92,8 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
     assert len(out) == 2
     assert len(out[0]) == DIMENSION
 
+
+@requires_api_key
 def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     # setup index if it doesn't exist
     pc = Pinecone()
@@ -102,7 +107,11 @@ def test_vector_store(embd_client: PineconeEmbeddings) -> None:
         spec=ServerlessSpec(cloud=CloudProvider.AWS, region=AwsRegion.US_WEST_2),
     )
     # now test connecting directly and adding docs
-    vectorstore = PineconeVectorStore(index_name=INDEX_NAME, embedding=embd_client)
+    vectorstore = PineconeVectorStore(
+        index_name=INDEX_NAME,
+        embedding=embd_client,
+        pinecone_api_key=os.environ.get("PINECONE_API_KEY", "")
+    )
     
     vectorstore.add_documents(
         [Document("Hello, world!"), Document("This is a test.")],
