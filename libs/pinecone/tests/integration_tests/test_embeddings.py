@@ -1,3 +1,4 @@
+import os
 import time
 from typing import AsyncGenerator
 
@@ -15,24 +16,35 @@ MODEL = "multilingual-e5-large"
 SPARSE_MODEL_NAME = "pinecone-sparse-english-v0"
 NAMESPACE_NAME = "test_namespace"
 
+# Check for required environment variables
+requires_api_key = pytest.mark.skipif(
+    "PINECONE_API_KEY" not in os.environ,
+    reason="Test requires PINECONE_API_KEY environment variable"
+)
 
 @pytest.fixture(scope="function")
 async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
-    client = PineconeEmbeddings(model=MODEL)
+    client = PineconeEmbeddings(
+        model=MODEL,
+        pinecone_api_key=os.environ.get("PINECONE_API_KEY")
+    )
     yield client
     await client.async_client.close()
 
 
 @pytest.fixture(scope="function")
 async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]:
-    client = PineconeSparseEmbeddings(model=SPARSE_MODEL_NAME)
+    client = PineconeSparseEmbeddings(
+        model=SPARSE_MODEL_NAME,
+        pinecone_api_key=os.environ.get("PINECONE_API_KEY")
+    )
     yield client
     await client.async_client.close()
 
 
 @pytest.fixture
 def pc() -> Pinecone:
-    return Pinecone()
+    return Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
 
 
 @pytest.fixture()
@@ -52,12 +64,14 @@ def pc_index(pc: Pinecone) -> Pinecone.Index:
     pc.delete_index(INDEX_NAME)
 
 
+@requires_api_key
 def test_embed_query(embd_client: PineconeEmbeddings) -> None:
     out = embd_client.embed_query("Hello, world!")
     assert isinstance(out, list)
     assert len(out) == DIMENSION
 
 
+@requires_api_key
 def test_sparse_embed_query(sparse_embd_client: PineconeSparseEmbeddings) -> None:
     out = sparse_embd_client.embed_query("Hello, world!")
     assert isinstance(out, SparseValues)
@@ -65,6 +79,7 @@ def test_sparse_embed_query(sparse_embd_client: PineconeSparseEmbeddings) -> Non
     assert len(out.values) == 2
 
 
+@requires_api_key
 @pytest.mark.asyncio
 async def test_aembed_query(embd_client: PineconeEmbeddings) -> None:
     out = await embd_client.aembed_query("Hello, world!")
@@ -72,6 +87,7 @@ async def test_aembed_query(embd_client: PineconeEmbeddings) -> None:
     assert len(out) == DIMENSION
 
 
+@requires_api_key
 def test_embed_documents(embd_client: PineconeEmbeddings) -> None:
     out = embd_client.embed_documents(["Hello, world!", "This is a test."])
     assert isinstance(out, list)
@@ -79,6 +95,7 @@ def test_embed_documents(embd_client: PineconeEmbeddings) -> None:
     assert len(out[0]) == DIMENSION
 
 
+@requires_api_key
 @pytest.mark.asyncio
 async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
     out = await embd_client.aembed_documents(["Hello, world!", "This is a test."])
@@ -87,10 +104,15 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
     assert len(out[0]) == DIMENSION
 
 
+@requires_api_key
 def test_vector_store(
     embd_client: PineconeEmbeddings, pc_index: Pinecone.Index
 ) -> None:
-    vectorstore = PineconeVectorStore(index_name=INDEX_NAME, embedding=embd_client)
+    vectorstore = PineconeVectorStore(
+        index_name=INDEX_NAME,
+        embedding=embd_client,
+        pinecone_api_key=os.environ.get("PINECONE_API_KEY")
+    )
     vectorstore.add_documents(
         [Document("Hello, world!"), Document("This is a test.")],
         namespace=NAMESPACE_NAME,
