@@ -5,6 +5,7 @@ from typing import AsyncGenerator
 
 import pytest
 from langchain_core.documents import Document
+from langchain_core.utils import convert_to_secret_str
 from pinecone import (
     AwsRegion,
     CloudProvider,
@@ -36,7 +37,7 @@ requires_api_key = pytest.mark.skipif(
 async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
     client = PineconeEmbeddings(
         model=MODEL,
-        pinecone_api_key=os.environ.get("PINECONE_API_KEY", ""),
+        api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
         dimension=DIMENSION,
     )
     yield client
@@ -47,7 +48,7 @@ async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
 async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]:
     client = PineconeSparseEmbeddings(
         model=SPARSE_MODEL_NAME,
-        pinecone_api_key=os.environ.get("PINECONE_API_KEY", ""),
+        api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
         dimension=DIMENSION,
     )
     yield client
@@ -111,7 +112,6 @@ def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     vectorstore = PineconeVectorStore(
         index_name=INDEX_NAME,
         embedding=embd_client,
-        pinecone_api_key=os.environ.get("PINECONE_API_KEY", ""),
     )
 
     vectorstore.add_documents(
