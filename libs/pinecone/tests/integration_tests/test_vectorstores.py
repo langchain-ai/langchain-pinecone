@@ -1,7 +1,7 @@
 import asyncio
-import os
 import time
 import uuid
+from datetime import datetime
 from typing import List
 
 import numpy as np
@@ -10,12 +10,13 @@ import pytest  # type: ignore[import-not-found]
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings  # type: ignore[import-not-found]
 from langchain_tests.integration_tests.vectorstores import VectorStoreIntegrationTests
-from pinecone import ServerlessSpec
+from pinecone import AwsRegion, CloudProvider, Metric, ServerlessSpec
 from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
 from langchain_pinecone import PineconeVectorStore
 
-INDEX_NAME = "langchain-test-index"  # name of the index
+# unique name of the index for this test run
+INDEX_NAME = f"langchain-test-vectorstores-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 NAMESPACE_NAME = "langchain-test-namespace"  # name of the namespace
 DIMENSION = 1536  # dimension of the embeddings
 
@@ -30,18 +31,16 @@ class TestPinecone(VectorStoreIntegrationTests):
     def setup_class(self) -> None:
         import pinecone
 
-        client = pinecone.Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-        index_list = client.list_indexes()
-        if INDEX_NAME in [
-            i["name"] for i in index_list
-        ]:  # change to list comprehension
+        client = pinecone.Pinecone()
+        print(f"client: {client}")  # noqa: T201
+        if client.has_index(name=INDEX_NAME):  # change to list comprehension
             client.delete_index(INDEX_NAME)
             time.sleep(DEFAULT_SLEEP)  # prevent race with subsequent creation
         client.create_index(
             name=INDEX_NAME,
             dimension=DIMENSION,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-west-2"),
+            metric=Metric.COSINE,
+            spec=ServerlessSpec(cloud=CloudProvider.AWS, region=AwsRegion.US_WEST_2),
         )
 
         self.index = client.Index(INDEX_NAME)
@@ -54,7 +53,6 @@ class TestPinecone(VectorStoreIntegrationTests):
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
         # delete all the vectors in the index
-        print("called")  # noqa: T201
         index_stats = self.index.describe_index_stats()
         if index_stats["total_vector_count"] > 0:
             try:
