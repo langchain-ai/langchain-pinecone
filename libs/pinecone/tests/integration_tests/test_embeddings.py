@@ -28,15 +28,16 @@ NAMESPACE_NAME = "test_namespace"
 # Check for required environment variables
 requires_api_key = pytest.mark.skipif(
     "PINECONE_API_KEY" not in os.environ,
-    reason="Test requires PINECONE_API_KEY environment variable"
+    reason="Test requires PINECONE_API_KEY environment variable",
 )
+
 
 @pytest.fixture(scope="function")
 async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
     client = PineconeEmbeddings(
         model=MODEL,
         pinecone_api_key=os.environ.get("PINECONE_API_KEY", ""),
-        dimension=DIMENSION
+        dimension=DIMENSION,
     )
     yield client
     await client.async_client.close()
@@ -47,7 +48,7 @@ async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]
     client = PineconeSparseEmbeddings(
         model=SPARSE_MODEL_NAME,
         pinecone_api_key=os.environ.get("PINECONE_API_KEY", ""),
-        dimension=DIMENSION
+        dimension=DIMENSION,
     )
     yield client
     await client.async_client.close()
@@ -110,9 +111,9 @@ def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     vectorstore = PineconeVectorStore(
         index_name=INDEX_NAME,
         embedding=embd_client,
-        pinecone_api_key=os.environ.get("PINECONE_API_KEY", "")
+        pinecone_api_key=os.environ.get("PINECONE_API_KEY", ""),
     )
-    
+
     vectorstore.add_documents(
         [Document("Hello, world!"), Document("This is a test.")],
         namespace=NAMESPACE_NAME,
