@@ -182,6 +182,7 @@ class PineconeVectorStore(VectorStore):
 
     _index: Optional[_Index] = None
     _async_index: Optional[_IndexAsyncio] = None
+    _index_host: str
 
     def __init__(
         self,
@@ -209,6 +210,9 @@ class PineconeVectorStore(VectorStore):
         self._namespace = namespace
         self.distance_strategy = distance_strategy
 
+        _index_host = host or os.environ.get("PINECONE_HOST")
+        if index and _index_host:
+            logger.warning("Index host ignored when initializing with index object.")
         if index:
             # supports old way of initializing externally
             if isinstance(index, _IndexAsyncio):
@@ -230,24 +234,24 @@ class PineconeVectorStore(VectorStore):
             self._pinecone_api_key = _pinecone_api_key
 
             # Store the host parameter or get from environment variable
-            self._index_host = host or os.environ.get("PINECONE_HOST")
-
             _index_name = index_name or os.environ.get("PINECONE_INDEX_NAME") or ""
-            if not _index_name:
+            if not _index_name and not _index_host:
                 raise ValueError(
                     "Pinecone index name must be provided in either `index_name` "
                     "or `PINECONE_INDEX_NAME` environment variable"
                 )
-            self._pinecone_api_key = _pinecone_api_key
 
             # Only create sync index if no host is provided
-            if not self._index_host:
+            if not _index_host:
                 client = PineconeClient(
                     api_key=_pinecone_api_key, source_tag="langchain"
                 )
-                self._index = client.Index(name=_index_name)
+                _index = client.Index(name=_index_name)
+                self._index = _index
                 # Cache host from the created index
-                self._index_host = self._index.config.host
+                self._index_host = _index.config.host
+            else:
+                self._index_host = _index_host
 
     @property
     def index(self) -> _Index:
@@ -258,7 +262,7 @@ class PineconeVectorStore(VectorStore):
             client = PineconeClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
             )
-            return client.Index(host=self._index_host)
+            self._index = client.Index(host=self._index_host)
         return self._index
 
     @property
