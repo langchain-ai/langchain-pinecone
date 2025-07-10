@@ -35,6 +35,8 @@ requires_api_key = pytest.mark.skipif(
 
 @pytest.fixture(scope="function")
 async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
+    if "PINECONE_API_KEY" not in os.environ:
+        pytest.skip("Test requires PINECONE_API_KEY environment variable")
     client = PineconeEmbeddings(
         model=MODEL,
         api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
@@ -46,6 +48,8 @@ async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
 
 @pytest.fixture(scope="function")
 async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]:
+    if "PINECONE_API_KEY" not in os.environ:
+        pytest.skip("Test requires PINECONE_API_KEY environment variable")
     client = PineconeSparseEmbeddings(
         model=SPARSE_MODEL_NAME,
         api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
