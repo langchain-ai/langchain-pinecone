@@ -218,6 +218,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         batch_size: int = 32,
         embedding_chunk_size: int = 1000,
         *,
+        async_req: bool = True,
         id_prefix: Optional[str] = None,
         **kwargs: Any,
     ) -> List[str]:
@@ -247,11 +248,24 @@ class PineconeSparseVectorStore(PineconeVectorStore):
                     chunk_ids, embeddings, chunk_metadatas
                 )
             ]
-            self.index.upsert(
-                vectors=vectors,
-                namespace=namespace,
-                **kwargs,
-            )
+            if async_req:
+                # Runs the pinecone upsert asynchronously.
+                async_res = [
+                    self.index.upsert(
+                        vectors=batch_vector,
+                        namespace=namespace,
+                        async_req=async_req,
+                        **kwargs,
+                    )
+                    for batch_vector in batch_iterate(batch_size, vectors)
+                ]
+                [res.get() for res in async_res]
+            else:
+                self.index.upsert(
+                    vectors=vectors,
+                    namespace=namespace,
+                    **kwargs,
+                )
         return ids
 
     async def aadd_texts(

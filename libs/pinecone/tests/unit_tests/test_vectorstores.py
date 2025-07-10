@@ -80,7 +80,7 @@ def test_id_prefix() -> None:
     vectorstore = PineconeVectorStore(index, embedding, text_key)
     texts = ["alpha", "beta", "gamma", "delta", "epsilon"]
     id_prefix = "testing_prefixes"
-    vectorstore.add_texts(texts, id_prefix=id_prefix)
+    vectorstore.add_texts(texts, id_prefix=id_prefix, async_req=False)
 
 
 def test_sparse_vectorstore__raises_on_dense_embedding(mocker: MockerFixture) -> None:
