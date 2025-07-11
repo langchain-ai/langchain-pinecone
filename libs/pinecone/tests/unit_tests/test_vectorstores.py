@@ -262,7 +262,7 @@ class TestVectorstores:
         vectorstore_cls: Type[PineconeVectorStore],
         mock_embedding_obj: str,
         mock_index: MockType,
-    ):
+    ) -> None:
         mock_embedding = request.getfixturevalue(mock_embedding_obj)
 
         mock_upsert_return = mocker.Mock()
@@ -288,7 +288,7 @@ class TestVectorstores:
         vectorstore_cls: Type[PineconeVectorStore],
         mock_embedding_obj: str,
         mock_index: MockType,
-    ):
+    ) -> None:
         mock_embedding = request.getfixturevalue(mock_embedding_obj)
 
         mock_upsert_return = mocker.Mock()
