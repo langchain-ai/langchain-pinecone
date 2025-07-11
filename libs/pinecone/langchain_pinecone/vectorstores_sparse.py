@@ -306,26 +306,26 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             embeddings = await self.embeddings.aembed_documents(chunk_texts)
             vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
 
-            async with self.async_index as idx:
-                # Split into batches and upsert asynchronously
-                tasks = []
-                for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
-                    task = idx.upsert(
-                        vectors=[
-                            Vector(
-                                id=chunk_id,
-                                sparse_values=sparse_values,
-                                metadata=metadata,
-                            )
-                            for chunk_id, sparse_values, metadata in batch_vector_tuples
-                        ],
-                        namespace=namespace,
-                        **kwargs,
-                    )
-                    tasks.append(task)
+            idx = await self.async_index
+            # Split into batches and upsert asynchronously
+            tasks = []
+            for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
+                task = idx.upsert(
+                    vectors=[
+                        Vector(
+                            id=chunk_id,
+                            sparse_values=sparse_values,
+                            metadata=metadata,
+                        )
+                        for chunk_id, sparse_values, metadata in batch_vector_tuples
+                    ],
+                    namespace=namespace,
+                    **kwargs,
+                )
+                tasks.append(task)
 
-                # Wait for all upserts to complete
-                await asyncio.gather(*tasks)
+            # Wait for all upserts to complete
+            await asyncio.gather(*tasks)
 
         return ids
 
@@ -424,14 +424,14 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             namespace = self._namespace
 
         docs = []
-        async with self.async_index as idx:
-            results = await idx.query(
-                sparse_vector=embedding,
-                top_k=k,
-                include_metadata=True,
-                namespace=namespace,
-                filter=filter,
-            )
+        idx = await self.async_index
+        results = await idx.query(
+            sparse_vector=embedding,
+            top_k=k,
+            include_metadata=True,
+            namespace=namespace,
+            filter=filter,
+        )
 
         for res in results["matches"]:
             metadata = res["metadata"]
@@ -571,15 +571,15 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        async with self.async_index as idx:
-            results = await idx.query(
-                sparse_vector=embedding,
-                top_k=fetch_k,
-                include_values=True,
-                include_metadata=True,
-                namespace=namespace,
-                filter=filter,
-            )
+        idx = await self.async_index
+        results = await idx.query(
+            sparse_vector=embedding,
+            top_k=fetch_k,
+            include_values=True,
+            include_metadata=True,
+            namespace=namespace,
+            filter=filter,
+        )
 
         mmr_selected = sparse_maximal_marginal_relevance(
             query_embedding=embedding,
@@ -694,20 +694,18 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         if namespace is None:
             namespace = self._namespace
 
+        idx = await self.async_index
         if delete_all:
-            async with self.async_index as idx:
-                await idx.delete(delete_all=True, namespace=namespace, **kwargs)
+            await idx.delete(delete_all=True, namespace=namespace, **kwargs)
         elif ids is not None:
             chunk_size = 1000
-            async with self.async_index as idx:
-                tasks = []
-                for i in range(0, len(ids), chunk_size):
-                    chunk = ids[i : i + chunk_size]
-                    tasks.append(idx.delete(ids=chunk, namespace=namespace, **kwargs))
-                await asyncio.gather(*tasks)
+            tasks = []
+            for i in range(0, len(ids), chunk_size):
+                chunk = ids[i : i + chunk_size]
+                tasks.append(idx.delete(ids=chunk, namespace=namespace, **kwargs))
+            await asyncio.gather(*tasks)
         elif filter is not None:
-            async with self.async_index as idx:
-                await idx.delete(filter=filter, namespace=namespace, **kwargs)
+            await idx.delete(filter=filter, namespace=namespace, **kwargs)
         else:
             raise ValueError("Either ids, delete_all, or filter must be provided.")
 

@@ -252,13 +252,13 @@ class PineconeVectorStore(VectorStore):
         return self._index
 
     @property
-    def async_index(self) -> _IndexAsyncio:
+    async def async_index(self) -> _IndexAsyncio:
         """Get asynchronous index instance."""
         if self._async_index is None:
-            client = PineconeAsyncioClient(
+            async with PineconeAsyncioClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
-            )
-            return client.IndexAsyncio(host=self.index.config.host)
+            ) as client:
+                return client.IndexAsyncio(host=self.index.config.host)
         return self._async_index
 
     @property
@@ -370,6 +370,7 @@ class PineconeVectorStore(VectorStore):
         for metadata, text in zip(metadatas, texts):
             metadata[self._text_key] = text
 
+        idx = await self.async_index
         # For loops to avoid memory issues and optimize when using HTTP based embeddings
         for i in range(0, len(texts), embedding_chunk_size):
             chunk_texts = texts[i : i + embedding_chunk_size]
@@ -378,19 +379,18 @@ class PineconeVectorStore(VectorStore):
             embeddings = await self._embedding.aembed_documents(chunk_texts)
             vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
 
-            async with self.async_index as idx:
-                # Split into batches and upsert asynchronously
-                tasks = []
-                for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
-                    task = idx.upsert(
-                        vectors=batch_vector_tuples,
-                        namespace=namespace,
-                        **kwargs,
-                    )
-                    tasks.append(task)
+            # Split into batches and upsert asynchronously
+            tasks = []
+            for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
+                task = idx.upsert(
+                    vectors=batch_vector_tuples,
+                    namespace=namespace,
+                    **kwargs,
+                )
+                tasks.append(task)
 
-                # Wait for all upserts to complete
-                await asyncio.gather(*tasks)
+            # Wait for all upserts to complete
+            await asyncio.gather(*tasks)
 
         return ids
 
@@ -492,14 +492,14 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         docs = []
-        async with self.async_index as idx:
-            results = await idx.query(
-                vector=embedding,
-                top_k=k,
-                include_metadata=True,
-                namespace=namespace,
-                filter=filter,
-            )
+        idx = await self.async_index
+        results = await idx.query(
+            vector=embedding,
+            top_k=k,
+            include_metadata=True,
+            namespace=namespace,
+            filter=filter,
+        )
 
         for res in results["matches"]:
             metadata = res["metadata"]
@@ -665,15 +665,15 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        async with self.async_index as idx:
-            results = await idx.query(
-                vector=embedding,
-                top_k=fetch_k,
-                include_values=True,
-                include_metadata=True,
-                namespace=namespace,
-                filter=filter,
-            )
+        idx = await self.async_index
+        results = await idx.query(
+            vector=embedding,
+            top_k=fetch_k,
+            include_values=True,
+            include_metadata=True,
+            namespace=namespace,
+            filter=filter,
+        )
 
         mmr_selected = maximal_marginal_relevance(
             np.array([embedding], dtype=np.float32),
@@ -935,19 +935,19 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         if delete_all:
-            async with self.async_index as idx:
-                await idx.delete(delete_all=True, namespace=namespace, **kwargs)
+            idx = await self.async_index
+            await idx.delete(delete_all=True, namespace=namespace, **kwargs)
         elif ids is not None:
             chunk_size = 1000
-            async with self.async_index as idx:
-                tasks = []
-                for i in range(0, len(ids), chunk_size):
-                    chunk = ids[i : i + chunk_size]
-                    tasks.append(idx.delete(ids=chunk, namespace=namespace, **kwargs))
-                await asyncio.gather(*tasks)
+            idx = await self.async_index
+            tasks = []
+            for i in range(0, len(ids), chunk_size):
+                chunk = ids[i : i + chunk_size]
+                tasks.append(idx.delete(ids=chunk, namespace=namespace, **kwargs))
+            await asyncio.gather(*tasks)
         elif filter is not None:
-            async with self.async_index as idx:
-                await idx.delete(filter=filter, namespace=namespace, **kwargs)
+            idx = await self.async_index
+            await idx.delete(filter=filter, namespace=namespace, **kwargs)
         else:
             raise ValueError("Either ids, delete_all, or filter must be provided.")
 
