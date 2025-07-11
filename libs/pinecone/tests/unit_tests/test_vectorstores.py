@@ -261,7 +261,7 @@ class TestVectorstores:
         mock_async_client: AsyncMockType,
         mock_embedding_obj: str,
         mock_index: MockType,
-    ):
+    ) -> None:
         """Test the PineconeAsyncio client is closed properly"""
         mock_embedding = request.getfixturevalue(mock_embedding_obj)
 
@@ -283,7 +283,7 @@ class TestVectorstores:
         mock_async_client: AsyncMockType,
         mock_embedding_obj: str,
         mock_index: MockType,
-    ):
+    ) -> None:
         """Test the PineconeAsyncio client is closed properly"""
         mock_embedding = request.getfixturevalue(mock_embedding_obj)
 
