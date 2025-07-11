@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING, Type
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock, call
 
 import pytest
 from pinecone import SparseValues  # type: ignore[import-untyped]
-from pytest_mock import AsyncMockType, MockerFixture
+from pytest_mock import AsyncMockType, MockerFixture, MockType
 
 from langchain_pinecone.embeddings import PineconeEmbeddings, PineconeSparseEmbeddings
 from langchain_pinecone.vectorstores import PineconeVectorStore
@@ -21,7 +21,8 @@ else:
 @pytest.fixture
 def mock_embedding(mocker: MockerFixture) -> AsyncMockType:
     """Fixture for mock embedding function."""
-    mock_embedding = mocker.AsyncMock()
+    mock_embedding = mocker.AsyncMock(spec=PineconeEmbeddings)
+    mock_embedding.embed_documents = mocker.Mock(return_value=[[0.1, 0.2, 0.3]])
     mock_embedding.aembed_documents = mocker.AsyncMock(return_value=[[0.1, 0.2, 0.3]])
     return mock_embedding
 
@@ -30,6 +31,9 @@ def mock_embedding(mocker: MockerFixture) -> AsyncMockType:
 def mock_sparse_embedding(mocker: MockerFixture) -> AsyncMockType:
     """Fixture for mock embedding function."""
     mock_embedding = mocker.AsyncMock(spec=PineconeSparseEmbeddings)
+    mock_embedding.embed_documents = mocker.Mock(
+        return_value=[SparseValues(indices=[0, 28, 218], values=[0.34, 0.239, 0.92])]
+    )
     mock_embedding.aembed_documents = mocker.AsyncMock(
         return_value=[SparseValues(indices=[0, 28, 218], values=[0.34, 0.239, 0.92])]
     )
@@ -45,6 +49,7 @@ def mock_async_index(mocker: MockerFixture) -> AsyncMockType:
     mock_async_index = mocker.AsyncMock(spec=_IndexAsyncio)
     mock_async_index.config = mocker.Mock()
     mock_async_index.config.host = "example.org"
+    mock_async_index.config.api_key = "test"
     mock_async_index.__aenter__ = mocker.AsyncMock(return_value=mock_async_index)
     mock_async_index.__aexit__ = mocker.AsyncMock(return_value=None)
     mock_async_index.upsert = mocker.AsyncMock(return_value=None)
@@ -55,15 +60,16 @@ def mock_async_index(mocker: MockerFixture) -> AsyncMockType:
 
 
 @pytest.fixture
-def mock_index(mocker: MockerFixture) -> AsyncMockType:
+def mock_index(mocker: MockerFixture) -> MockType:
     """Fixture for mock async index."""
     # Import the actual _IndexAsyncio class to use as spec
     from pinecone.data import _Index
 
-    mock_index = mocker.AsyncMock(spec=_Index)
+    mock_index = mocker.Mock(spec=_Index)
     mock_index.config = mocker.Mock()
     mock_index.config.host = "example.org"
-    mock_index.upsert = mocker.AsyncMock(return_value=None)
+    mock_index.config.api_key = "test"
+    mock_index.upsert = mocker.Mock(return_value=mocker.Mock())
     mock_index.describe_index_stats = mocker.Mock(
         return_value={"vector_type": "sparse"}
     )
@@ -247,3 +253,59 @@ class TestVectorstores:
         test_filter = {"metadata_field": "value"}
         await vectorstore.adelete(filter=test_filter)
         mock_async_index.delete.assert_called_with(filter=test_filter, namespace=None)
+
+    @pytest.mark.asyncio
+    async def test_sync_req_with_async_req__use_future_parallelism(
+        self,
+        request: FixtureRequest,
+        mocker: MockerFixture,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_index: MockType,
+    ):
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        mock_upsert_return = mocker.Mock()
+        mock_index.upsert = mocker.Mock(return_value=mock_upsert_return)
+
+        # Create vectorstore
+        vectorstore = vectorstore_cls(
+            index=mock_index, embedding=mock_embedding, text_key="text"
+        )
+
+        texts = ["test"] * 3
+        vectorstore.add_texts(texts, async_req=True)
+        mock_embedding.embed_documents.assert_called_once_with(texts)
+
+        mock_index.upsert.assert_called_once()
+        mock_upsert_return.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_sync_req_with_async_req__use_future_parallelism_multi(
+        self,
+        request: FixtureRequest,
+        mocker: MockerFixture,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_index: MockType,
+    ):
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        mock_upsert_return = mocker.Mock()
+        mock_index.upsert = mocker.Mock(return_value=mock_upsert_return)
+
+        # Create vectorstore
+        vectorstore = vectorstore_cls(
+            index=mock_index, embedding=mock_embedding, text_key="text"
+        )
+
+        texts = ["test"] * 3000  # 3x embedding_chunk_size
+        vectorstore.add_texts(texts, async_req=True)
+
+        # When async_req == True, we expect `upsert` to be called 3 times...
+        mock_index.upsert.assert_has_calls(
+            [call(vectors=ANY, namespace=ANY, async_req=ANY)] * 3  # type: ignore
+        )
+        # each upsert call will yield a `multiprocessing.pool.ApplyResult` object
+        # assert we fetch the future result 3 times
+        mock_upsert_return.get.assert_has_calls([call()] * 3)

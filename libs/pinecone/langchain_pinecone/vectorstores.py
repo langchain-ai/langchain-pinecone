@@ -292,7 +292,7 @@ class PineconeVectorStore(VectorStore):
             namespace: Optional pinecone namespace to add the texts to.
             batch_size: Batch size to use when adding the texts to the vectorstore.
             embedding_chunk_size: Chunk size to use when embedding the texts.
-            async_req: Whether runs asynchronously.
+            async_req: Whether runs asynchronously. Defaults to True.
             id_prefix: Optional string to use as an ID prefix when upserting vectors.
 
         Returns:
