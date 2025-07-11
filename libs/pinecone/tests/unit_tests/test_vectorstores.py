@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING, Type
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 from pinecone import PineconeAsyncio, SparseValues  # type: ignore[import-untyped]
@@ -273,3 +273,29 @@ class TestVectorstores:
         await vectorstore.aadd_texts(["test"])
 
         mock_async_client.return_value.__aexit__.assert_called_once()
+        mock_async_client.return_value.IndexAsyncio.return_value.__aexit__.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_index__closes_only_once_even_multiple_calls(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_async_client: AsyncMockType,
+        mock_embedding_obj: str,
+        mock_index: MockType,
+    ):
+        """Test the PineconeAsyncio client is closed properly"""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        # Create vectorstore
+        vectorstore = vectorstore_cls(
+            index=mock_index, embedding=mock_embedding, text_key="text"
+        )
+
+        await vectorstore.aadd_texts(["test1"] * 2000)  # 2x embedding_chunk_size
+
+        # Even though embeddings are called twice (for each chunk in loop) ...
+        mock_embedding.aembed_documents.assert_has_calls([call(["test1"] * 1000)] * 2)
+
+        # ... we're persisting the connection and only closing on completion
+        mock_async_client.return_value.IndexAsyncio.return_value.__aexit__.assert_called_once()
