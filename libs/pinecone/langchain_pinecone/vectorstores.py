@@ -252,13 +252,13 @@ class PineconeVectorStore(VectorStore):
         return self._index
 
     @property
-    def async_index(self) -> _IndexAsyncio:
+    async def async_index(self) -> _IndexAsyncio:
         """Get asynchronous index instance."""
         if self._async_index is None:
-            client = PineconeAsyncioClient(
+            async with PineconeAsyncioClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
-            )
-            return client.IndexAsyncio(host=self.index.config.host)
+            ) as client:
+                return client.IndexAsyncio(host=self.index.config.host)
         return self._async_index
 
     @property
@@ -387,15 +387,18 @@ class PineconeVectorStore(VectorStore):
         for metadata, text in zip(metadatas, texts):
             metadata[self._text_key] = text
 
-        # For loops to avoid memory issues and optimize when using HTTP based embeddings
-        for i in range(0, len(texts), embedding_chunk_size):
-            chunk_texts = texts[i : i + embedding_chunk_size]
-            chunk_ids = ids[i : i + embedding_chunk_size]
-            chunk_metadatas = metadatas[i : i + embedding_chunk_size]
-            embeddings = await self._embedding.aembed_documents(chunk_texts)
-            vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+        idx: _IndexAsyncio = await self.async_index
 
-            async with self.async_index as idx:
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
+            # For loops to avoid memory issues and optimize when using HTTP based embeddings
+            for i in range(0, len(texts), embedding_chunk_size):
+                chunk_texts = texts[i : i + embedding_chunk_size]
+                chunk_ids = ids[i : i + embedding_chunk_size]
+                chunk_metadatas = metadatas[i : i + embedding_chunk_size]
+                embeddings = await self._embedding.aembed_documents(chunk_texts)
+                vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+
                 # Split into batches and upsert asynchronously
                 tasks = []
                 for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
@@ -509,7 +512,9 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         docs = []
-        async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=k,
@@ -682,7 +687,9 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=fetch_k,
@@ -953,24 +960,24 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        if delete_all:
-            async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
+            if delete_all:
                 await idx.delete(delete_all=True, namespace=namespace, **kwargs)
-        elif ids is not None:
-            chunk_size = 1000
-            async with self.async_index as idx:
+            elif ids is not None:
+                chunk_size = 1000
                 tasks = []
                 for i in range(0, len(ids), chunk_size):
                     chunk = ids[i : i + chunk_size]
                     tasks.append(idx.delete(ids=chunk, namespace=namespace, **kwargs))
                 await asyncio.gather(*tasks)
-        elif filter is not None:
-            async with self.async_index as idx:
+            elif filter is not None:
                 await idx.delete(filter=filter, namespace=namespace, **kwargs)
-        else:
-            raise ValueError("Either ids, delete_all, or filter must be provided.")
+            else:
+                raise ValueError("Either ids, delete_all, or filter must be provided.")
 
-        return None
+            return None
 
 
 @deprecated(since="0.0.3", removal="1.0.0", alternative="PineconeVectorStore")
