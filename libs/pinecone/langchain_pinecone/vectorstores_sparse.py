@@ -182,6 +182,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         *,
         pinecone_api_key: Optional[str] = None,
         index_name: Optional[str] = None,
+        host: Optional[str] = None,
     ):
         if index and index.describe_index_stats()["vector_type"] != "sparse":
             raise ValueError(
@@ -195,6 +196,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             distance_strategy,
             pinecone_api_key=pinecone_api_key,
             index_name=index_name,
+            host=host,
         )
 
     @property
