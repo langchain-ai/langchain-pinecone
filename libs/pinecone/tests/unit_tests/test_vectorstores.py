@@ -95,6 +95,7 @@ def mock_pinecone_async_client(
     mock_pinecone_async_client.return_value.IndexAsyncio.return_value = mock_async_index
     return mock_pinecone_async_client
 
+
 @pytest.fixture
 def mock_async_client(
     mocker: MockerFixture, mock_async_index: MockType
