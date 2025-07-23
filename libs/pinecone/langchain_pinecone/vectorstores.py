@@ -279,7 +279,7 @@ class PineconeVectorStore(VectorStore):
                         "Index host must be available either from cached index, "
                         "PINECONE_HOST environment variable, or host parameter"
                     )
-                return client.IndexAsyncio(host=self.index.config.host)
+                return client.IndexAsyncio(host=host)
         return self._async_index
 
     @property

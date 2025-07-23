@@ -92,7 +92,10 @@ def mock_pinecone_async_client(
     mock_pinecone_async_client = mocker.patch(
         "langchain_pinecone.vectorstores.PineconeAsyncioClient"
     )
-    mock_pinecone_async_client.return_value.IndexAsyncio.return_value = mock_async_index
+    instance = mock_pinecone_async_client.return_value
+    instance.__aenter__.return_value = instance
+    instance.__aexit__.return_value = None
+    instance.IndexAsyncio.return_value = mock_async_index
     return mock_pinecone_async_client
 
 
@@ -217,7 +220,8 @@ class TestVectorstores:
         # Verify that _index is None since no sync index was created
         assert vectorstore._index is None
 
-    def test_async_index__uses_cached_host_without_sync_calls(
+    @pytest.mark.asyncio
+    async def test_async_index__uses_cached_host_without_sync_calls(
         self,
         request: FixtureRequest,
         vectorstore_cls: Type[PineconeVectorStore],
@@ -236,7 +240,7 @@ class TestVectorstores:
         )
 
         # Access async_index property
-        result = vectorstore.async_index
+        result = await vectorstore.async_index
 
         # Verify async client was called with the cached host
         mock_pinecone_async_client.return_value.IndexAsyncio.assert_called_once_with(
