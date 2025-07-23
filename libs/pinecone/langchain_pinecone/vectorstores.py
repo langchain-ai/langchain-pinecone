@@ -273,7 +273,7 @@ class PineconeVectorStore(VectorStore):
                 api_key=self._pinecone_api_key, source_tag="langchain"
             ) as client:
                 # Priority: constructor parameter → cached host → environment variable
-                host = self._index_host or self.index.config.host or os.getenv("PINECONE_HOST")
+                host = self._index_host
                 if not host:
                     raise ValueError(
                         "Index host must be available either from cached index, "
