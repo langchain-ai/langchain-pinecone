@@ -14,7 +14,7 @@ dependencies = [
     "langchain-openai>=0.3.11",
 ]
 name = "langchain-pinecone"
-version = "0.2.10"
+version = "0.2.11"
 description = "An integration package connecting Pinecone and LangChain"
 readme = "README.md"
 
