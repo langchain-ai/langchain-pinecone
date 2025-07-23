@@ -413,47 +413,36 @@ class PineconeVectorStore(VectorStore):
                 await asyncio.gather(*tasks)
 
         return ids
-    
+
     def similarity_search_by_vector(
         self,
         embedding: List[float],
-        *,
         k: int = 4,
-        filter: Optional[dict] = None,
-        namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Return documents most similar to the given embedding vector.
 
         Wraps `similarity_search_by_vector_with_score` but strips the scores.
         """
         docs_and_scores = self.similarity_search_by_vector_with_score(
-            embedding=embedding,
-            k=k,
-            filter=filter,
-            namespace=namespace
+            embedding=embedding, k=k, **kwargs
         )
         return [doc for doc, _ in docs_and_scores]
 
     async def asimilarity_search_by_vector(
         self,
         embedding: List[float],
-        *,
         k: int = 4,
-        filter: Optional[dict] = None,
-        namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Document]:
         """Return documents most similar to the given embedding vector asynchronously.
 
         Wraps `asimilarity_search_by_vector_with_score` but strips the scores.
         """
         docs_and_scores = await self.asimilarity_search_by_vector_with_score(
-            embedding=embedding,
-            k=k,
-            filter=filter,
-            namespace=namespace
+            embedding=embedding, k=k, **kwargs
         )
         return [doc for doc, _ in docs_and_scores]
-
 
     def similarity_search_with_score(
         self,
@@ -461,6 +450,7 @@ class PineconeVectorStore(VectorStore):
         k: int = 4,
         filter: Optional[dict] = None,
         namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to query, along with scores.
 
@@ -474,7 +464,11 @@ class PineconeVectorStore(VectorStore):
             List of Documents most similar to the query and score for each
         """
         return self.similarity_search_by_vector_with_score(
-            self._embedding.embed_query(query), k=k, filter=filter, namespace=namespace
+            self._embedding.embed_query(query),
+            k=k,
+            filter=filter,
+            namespace=namespace,
+            **kwargs,
         )
 
     async def asimilarity_search_with_score(
@@ -483,6 +477,7 @@ class PineconeVectorStore(VectorStore):
         k: int = 4,
         filter: Optional[dict] = None,
         namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> list[tuple[Document, float]]:
         """Asynchronously return pinecone documents most similar to query, along with scores.
 
@@ -500,6 +495,7 @@ class PineconeVectorStore(VectorStore):
             k=k,
             filter=filter,
             namespace=namespace,
+            **kwargs,
         )
 
     def similarity_search_by_vector_with_score(
@@ -507,13 +503,12 @@ class PineconeVectorStore(VectorStore):
         embedding: List[float],
         *,
         k: int = 4,
-        filter: Optional[dict] = None,
-        namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to embedding, along with scores."""
+        namespace = kwargs.get("namespace", self._namespace)
+        filter = kwargs.get("filter")
 
-        if namespace is None:
-            namespace = self._namespace
         docs = []
         results = self.index.query(
             vector=embedding,
@@ -545,12 +540,11 @@ class PineconeVectorStore(VectorStore):
         embedding: List[float],
         *,
         k: int = 4,
-        filter: Optional[dict] = None,
-        namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to embedding, along with scores asynchronously."""
-        if namespace is None:
-            namespace = self._namespace
+        namespace = kwargs.get("namespace", self._namespace)
+        filter = kwargs.get("filter")
 
         docs = []
         idx = await self.async_index

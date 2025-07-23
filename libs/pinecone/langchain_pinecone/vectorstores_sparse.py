@@ -351,6 +351,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         k: int = 4,
         filter: Optional[dict] = None,
         namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to query, along with scores.
 
@@ -364,7 +365,11 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             List of Documents most similar to the query and score for each
         """
         return self.similarity_search_by_vector_with_score(
-            self.embeddings.embed_query(query), k=k, filter=filter, namespace=namespace
+            self.embeddings.embed_query(query),
+            k=k,
+            filter=filter,
+            namespace=namespace,
+            **kwargs,
         )
 
     async def asimilarity_search_with_score(
@@ -373,6 +378,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         k: int = 4,
         filter: Optional[dict] = None,
         namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> list[tuple[Document, float]]:
         """Asynchronously return pinecone documents most similar to query, along with scores.
 
@@ -390,6 +396,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             k=k,
             filter=filter,
             namespace=namespace,
+            **kwargs,
         )
 
     def similarity_search_by_vector_with_score(
@@ -399,6 +406,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         k: int = 4,
         filter: Optional[dict] = None,
         namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to embedding, along with scores."""
 
@@ -411,6 +419,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             include_metadata=True,
             namespace=namespace,
             filter=filter,
+            **kwargs,
         )
         for res in results["matches"]:
             metadata = res["metadata"]
@@ -434,6 +443,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         k: int = 4,
         filter: Optional[dict] = None,
         namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to embedding, along with scores asynchronously."""
         if namespace is None:
@@ -449,6 +459,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
                 include_metadata=True,
                 namespace=namespace,
                 filter=filter,
+                **kwargs,
             )
 
         for res in results["matches"]:
