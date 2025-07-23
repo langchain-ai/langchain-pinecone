@@ -266,20 +266,20 @@ class PineconeVectorStore(VectorStore):
         return self._index
 
     @property
-    def async_index(self) -> _IndexAsyncio:
+    async def async_index(self) -> _IndexAsyncio:
         """Get asynchronous index instance."""
         if self._async_index is None:
-            client = PineconeAsyncioClient(
+            async with PineconeAsyncioClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
-            )
-            # Priority: constructor parameter → cached host → environment variable
-            host = self._index_host
-            if not host:
-                raise ValueError(
-                    "Index host must be available either from cached index, "
-                    "PINECONE_HOST environment variable, or host parameter"
-                )
-            return client.IndexAsyncio(host=host)
+            ) as client:
+                # Priority: constructor parameter → cached host → environment variable
+                host = self._index_host or self.index.config.host or os.getenv("PINECONE_HOST")
+                if not host:
+                    raise ValueError(
+                        "Index host must be available either from cached index, "
+                        "PINECONE_HOST environment variable, or host parameter"
+                    )
+                return client.IndexAsyncio(host=self.index.config.host)
         return self._async_index
 
     @property
@@ -296,6 +296,7 @@ class PineconeVectorStore(VectorStore):
         batch_size: int = 32,
         embedding_chunk_size: int = 1000,
         *,
+        async_req: bool = True,
         id_prefix: Optional[str] = None,
         **kwargs: Any,
     ) -> List[str]:
@@ -312,6 +313,7 @@ class PineconeVectorStore(VectorStore):
             namespace: Optional pinecone namespace to add the texts to.
             batch_size: Batch size to use when adding the texts to the vectorstore.
             embedding_chunk_size: Chunk size to use when embedding the texts.
+            async_req: Whether runs asynchronously. Defaults to True.
             id_prefix: Optional string to use as an ID prefix when upserting vectors.
 
         Returns:
@@ -333,17 +335,32 @@ class PineconeVectorStore(VectorStore):
 
         # For loops to avoid memory issues and optimize when using HTTP based embeddings
         # The first loop runs the embeddings, it benefits when using OpenAI embeddings
+        # The second loops runs the pinecone upsert asynchronously.
         for i in range(0, len(texts), embedding_chunk_size):
             chunk_texts = texts[i : i + embedding_chunk_size]
             chunk_ids = ids[i : i + embedding_chunk_size]
             chunk_metadatas = metadatas[i : i + embedding_chunk_size]
             embeddings = self._embedding.embed_documents(chunk_texts)
             vector_tuples = list(zip(chunk_ids, embeddings, chunk_metadatas))
-            self.index.upsert(
-                vectors=vector_tuples,
-                namespace=namespace,
-                **kwargs,
-            )
+            if async_req:
+                # Runs the pinecone upsert asynchronously.
+                async_res = [
+                    self.index.upsert(
+                        vectors=batch_vector_tuples,
+                        namespace=namespace,
+                        async_req=async_req,
+                        **kwargs,
+                    )
+                    for batch_vector_tuples in batch_iterate(batch_size, vector_tuples)
+                ]
+                [res.get() for res in async_res]
+            else:
+                self.index.upsert(
+                    vectors=vector_tuples,
+                    namespace=namespace,
+                    async_req=async_req,
+                    **kwargs,
+                )
 
         return ids
 
@@ -391,15 +408,18 @@ class PineconeVectorStore(VectorStore):
         for metadata, text in zip(metadatas, texts):
             metadata[self._text_key] = text
 
-        # For loops to avoid memory issues and optimize when using HTTP based embeddings
-        for i in range(0, len(texts), embedding_chunk_size):
-            chunk_texts = texts[i : i + embedding_chunk_size]
-            chunk_ids = ids[i : i + embedding_chunk_size]
-            chunk_metadatas = metadatas[i : i + embedding_chunk_size]
-            embeddings = await self._embedding.aembed_documents(chunk_texts)
-            vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+        idx: _IndexAsyncio = await self.async_index
 
-            async with self.async_index as idx:
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
+            # For loops to avoid memory issues and optimize when using HTTP based embeddings
+            for i in range(0, len(texts), embedding_chunk_size):
+                chunk_texts = texts[i : i + embedding_chunk_size]
+                chunk_ids = ids[i : i + embedding_chunk_size]
+                chunk_metadatas = metadatas[i : i + embedding_chunk_size]
+                embeddings = await self._embedding.aembed_documents(chunk_texts)
+                vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+
                 # Split into batches and upsert asynchronously
                 tasks = []
                 for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
@@ -513,7 +533,9 @@ class PineconeVectorStore(VectorStore):
             namespace = self._namespace
 
         docs = []
-        async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=k,
@@ -686,7 +708,9 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=fetch_k,
@@ -814,6 +838,7 @@ class PineconeVectorStore(VectorStore):
         upsert_kwargs: Optional[dict] = None,
         pool_threads: int = 4,
         embeddings_chunk_size: int = 1000,
+        async_req: bool = True,
         *,
         id_prefix: Optional[str] = None,
         **kwargs: Any,
@@ -855,6 +880,7 @@ class PineconeVectorStore(VectorStore):
             namespace=namespace,
             batch_size=batch_size,
             embedding_chunk_size=embeddings_chunk_size,
+            async_req=async_req,
             id_prefix=id_prefix,
             **(upsert_kwargs or {}),
         )
@@ -955,24 +981,24 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        if delete_all:
-            async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
+            if delete_all:
                 await idx.delete(delete_all=True, namespace=namespace, **kwargs)
-        elif ids is not None:
-            chunk_size = 1000
-            async with self.async_index as idx:
+            elif ids is not None:
+                chunk_size = 1000
                 tasks = []
                 for i in range(0, len(ids), chunk_size):
                     chunk = ids[i : i + chunk_size]
                     tasks.append(idx.delete(ids=chunk, namespace=namespace, **kwargs))
                 await asyncio.gather(*tasks)
-        elif filter is not None:
-            async with self.async_index as idx:
+            elif filter is not None:
                 await idx.delete(filter=filter, namespace=namespace, **kwargs)
-        else:
-            raise ValueError("Either ids, delete_all, or filter must be provided.")
+            else:
+                raise ValueError("Either ids, delete_all, or filter must be provided.")
 
-        return None
+            return None
 
 
 @deprecated(since="0.0.3", removal="1.0.0", alternative="PineconeVectorStore")
