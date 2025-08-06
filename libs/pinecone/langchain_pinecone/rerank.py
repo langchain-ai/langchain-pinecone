@@ -8,12 +8,15 @@ from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.utils import secret_from_env
 from pinecone import Pinecone, PineconeAsyncio
-from pydantic import ConfigDict, Field, SecretStr
+from pydantic import ConfigDict, Field, SecretStr, model_validator
+
+from langchain_pinecone._utilities import get_pinecone_supported_models
 
 logger = logging.getLogger(__name__)
 
 
 class PineconeRerank(BaseDocumentCompressor):
+
     """Document compressor that uses `Pinecone Rerank API`."""
 
     client: Optional[Pinecone] = None
@@ -41,6 +44,22 @@ class PineconeRerank(BaseDocumentCompressor):
         extra="forbid",
         arbitrary_types_allowed=True,
     )
+
+    @model_validator(mode="after")
+    def validate_model_supported(self):
+        """Validate that the provided model is supported by Pinecone for reranking."""
+        api_key = self._get_api_key()
+        supported = self.list_supported_models(api_key)
+        supported_names = [m["model"] for m in supported]
+        if self.model not in supported_names:
+            raise ValueError(f"Model '{self.model}' is not a supported Pinecone reranker model. Supported: {supported_names}")
+        return self
+
+    @classmethod
+    def list_supported_models(cls, pinecone_api_key: str = None, model_type:str = "rerank", vector_type: str = None):
+        """Return a list of supported embedding models from Pinecone."""
+        return get_pinecone_supported_models(pinecone_api_key, model_type=model_type, vector_type=vector_type)
+
 
     def _get_api_key(self) -> Optional[str]:
         """Get the API key from SecretStr or directly."""

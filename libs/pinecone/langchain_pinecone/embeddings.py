@@ -9,6 +9,8 @@ from pinecone import (
 )
 from pinecone import SparseValues
 
+from langchain_pinecone._utilities import get_pinecone_supported_models
+
 # Conditional import for EmbeddingsList based on Pinecone version
 try:
     from pinecone.core.openapi.inference.model.embeddings_list import EmbeddingsList
@@ -138,6 +140,22 @@ class PineconeEmbeddings(BaseModel, Embeddings):
                 if key not in values:
                     values[key] = value
         return values
+    
+    @classmethod
+    def list_supported_models(cls, pinecone_api_key: str = None, model_type:str = "embed", vector_type: str = None):
+        """Return a list of supported embedding models from Pinecone."""
+        return get_pinecone_supported_models(pinecone_api_key, model_type=model_type, vector_type=vector_type)
+
+
+    @model_validator(mode="after")
+    def validate_model_supported(self) -> Self:
+        """Validate that the provided model is supported by Pinecone."""
+        api_key = self.pinecone_api_key.get_secret_value()
+        supported = self.list_supported_models(api_key)
+        supported_names = [m["model"] for m in supported]
+        if self.model not in supported_names:
+            raise ValueError(f"Model '{self.model}' is not a supported Pinecone embedding model. Supported: {supported_names}")
+        return self
 
     @model_validator(mode="after")
     def validate_environment(self) -> Self:

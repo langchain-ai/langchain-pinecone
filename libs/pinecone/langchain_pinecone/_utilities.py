@@ -1,10 +1,14 @@
 from enum import Enum
-from typing import List, Union
+from typing import List, Literal, Optional, Union
 
 import numpy as np
-from pinecone import SparseValues  # type: ignore[import-untyped]
+from pinecone import (
+    Pinecone,
+    SparseValues,  # type: ignore[import-untyped]
+)
 
 Matrix = Union[List[List[float]], List[np.ndarray], np.ndarray]
+
 
 
 class DistanceStrategy(str, Enum):
@@ -185,3 +189,40 @@ def sparse_cosine_similarity(X: SparseValues, Y: List[SparseValues]) -> np.ndarr
             similarities[i] = dot_product / (x_norm * y_norm)
 
     return similarities
+
+def get_pinecone_supported_models(api_key: str, model_type: str = None, vector_type: str = None):
+    """Fetch supported models from Pinecone dynamically.
+    Args:
+        api_key: Pinecone API key
+        model_type: 'embed', 'rerank', or None for all
+        vector_type: 'dense', 'sparse', or None
+    Returns:
+        List of model info dicts
+    Raises:
+        ValueError: if model_type or vector_type is not allowed
+    """
+    class _ModelParamsModel:
+        model_type: Optional[Literal["embed", "rerank"]] = None
+        vector_type: Optional[Literal["dense", "sparse"]] = None
+
+        @classmethod
+        def validate(cls, model_type, vector_type):
+            # Pydantic-style validation
+            allowed_model_types = ("embed", "rerank", None)
+            allowed_vector_types = ("dense", "sparse", None)
+            if model_type not in allowed_model_types:
+                raise ValueError(f"model_type must be one of {allowed_model_types}, got {model_type}")
+            if vector_type not in allowed_vector_types:
+                raise ValueError(f"vector_type must be one of {allowed_vector_types}, got {vector_type}")
+            return model_type, vector_type
+
+    # Validate arguments
+    _ModelParamsModel.validate(model_type, vector_type)
+
+    pc = Pinecone(api_key=api_key)
+    kwargs = {}
+    if model_type:
+        kwargs["type"] = model_type
+    if vector_type:
+        kwargs["vector_type"] = vector_type
+    return pc.inference.list_models(**kwargs)

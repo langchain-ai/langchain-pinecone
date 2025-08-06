@@ -210,3 +210,25 @@ retriever = vector_store.as_retriever(
 )
 retriever.invoke("Stealing from the bank is a crime", filter={"source": "news"})
 ```
+
+### List Supported Pinecone Models (Dynamic)
+
+You can dynamically fetch the list of supported embedding and reranker models from Pinecone using the following methods:
+
+```python
+from langchain_pinecone import PineconeEmbeddings, PineconeRerank
+
+# List all supported embedding models
+embedding_models = PineconeEmbeddings.list_supported_models()
+print("Embedding models:", [m["model"] for m in embedding_models])
+
+# List all supported reranker models
+reranker_models = PineconeRerank.list_supported_models()
+print("Reranker models:", [m["model"] for m in reranker_models])
+
+# You can also filter by vector type (e.g., 'dense' or 'sparse')
+sparse_embedding_models = PineconeEmbeddings.list_supported_models(vector_type="sparse")
+print("Sparse embedding models:", [m["model"] for m in sparse_embedding_models])
+```
+
+This ensures your application always uses valid, up-to-date model names from Pinecone.
