@@ -13,12 +13,17 @@ API_KEY = convert_to_secret_str("NOT_A_VALID_KEY")
 MODEL_NAME = "multilingual-e5-large"
 SPARSE_MODEL_NAME = "pinecone-sparse-english-v0"
 
+
 @pytest.fixture(autouse=True)
 def patch_pinecone_model_listing(mocker):
     mocker.patch(
         "langchain_pinecone.embeddings.PineconeEmbeddings.list_supported_models",
-        return_value=[{"model": "multilingual-e5-large"}, {"model": "pinecone-sparse-english-v0"}]
+        return_value=[
+            {"model": "multilingual-e5-large"},
+            {"model": "pinecone-sparse-english-v0"},
+        ],
     )
+
 
 @pytest.fixture(autouse=True)
 def mock_pinecone() -> Any:
@@ -50,7 +55,7 @@ class TestPineconeEmbeddingsConfig:
         # Patch list_supported_models to return a list containing MODEL_NAME
         mocker.patch(
             "langchain_pinecone.embeddings.PineconeEmbeddings.list_supported_models",
-            return_value=[{"model": MODEL_NAME}]
+            return_value=[{"model": MODEL_NAME}],
         )
         embeddings = PineconeEmbeddings(model=MODEL_NAME, pinecone_api_key=API_KEY)
         assert embeddings.model == MODEL_NAME
@@ -60,10 +65,13 @@ class TestPineconeEmbeddingsConfig:
         # Patch list_supported_models to return a list NOT containing 'invalid-model'
         mocker.patch(
             "langchain_pinecone.embeddings.PineconeEmbeddings.list_supported_models",
-            return_value=[{"model": MODEL_NAME}]
+            return_value=[{"model": MODEL_NAME}],
         )
-        with pytest.raises(ValueError, match="not a supported Pinecone embedding model"):
+        with pytest.raises(
+            ValueError, match="not a supported Pinecone embedding model"
+        ):
             PineconeEmbeddings(model="invalid-model", pinecone_api_key=API_KEY)
+
     """Additional configuration tests for PineconeEmbeddings."""
 
     @pytest.mark.parametrize(

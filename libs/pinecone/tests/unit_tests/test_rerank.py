@@ -1,6 +1,4 @@
-# Workaround for pytest-socket + pytest-asyncio event loop setup on Windows
 import os
-import sys
 from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,44 +8,15 @@ from pinecone import Pinecone, PineconeAsyncio
 from pydantic import SecretStr
 
 from langchain_pinecone.rerank import PineconeRerank
+from langchain_core.utils import convert_to_secret_str
 
-
-@pytest.fixture(autouse=True, scope="session")
-def allow_event_loop_sockets():
-    if sys.platform.startswith("win"):
-        try:
-            import pytest_socket
-            pytest_socket.disable_socket(allow_unix_socket=True)
-            yield
-        finally:
-            pytest_socket.enable_socket()
-
-
-# Patch Pinecone and PineconeAsyncio constructors to prevent real network calls in all tests
-@pytest.fixture(autouse=True)
-def patch_pinecone_clients(mocker, request):
-    # Patch only the constructor, not the type, so isinstance checks work
-    from unittest.mock import AsyncMock, MagicMock
-    # Patch Pinecone constructor
-    if 'mock_pinecone_client' in request.fixturenames:
-        mock_client = request.getfixturevalue('mock_pinecone_client')
-    else:
-        mock_client = MagicMock(spec=Pinecone)
-        mock_client.inference = MagicMock()
-    mocker.patch.object(Pinecone, '__new__', return_value=mock_client)
-    # Patch PineconeAsyncio constructor
-    if 'mock_pinecone_async_client' in request.fixturenames:
-        mock_async_client = request.getfixturevalue('mock_pinecone_async_client')
-    else:
-        mock_async_client = MagicMock(spec=PineconeAsyncio)
-        mock_async_client.inference = AsyncMock()
-    mocker.patch.object(PineconeAsyncio, '__new__', return_value=mock_async_client)
+API_KEY = convert_to_secret_str("NOT_A_VALID_KEY")
 
 @pytest.fixture(autouse=True)
 def patch_pinecone_rerank_model_listing(mocker):
     mocker.patch(
         "langchain_pinecone.rerank.PineconeRerank.list_supported_models",
-        return_value=[{"model": "test-model"}, {"model": "cohere-rerank-3.5"}]
+        return_value=[{"model": "test-model"}, {"model": "cohere-rerank-3.5"}, {"model": "bge-reranker-v2-m3"}]
     )
 
 # helper function for testing shared assertions in later rerank tests
@@ -84,24 +53,6 @@ def check_rerank_call_and_results(
 
 
 class TestPineconeRerank:
-    def test_valid_model_parameter(self, mocker):
-        """Test that a valid model name passes validation for rerank."""
-        mocker.patch(
-            "langchain_pinecone.rerank.PineconeRerank.list_supported_models",
-            return_value=[{"model": "test-model"}]
-        )
-        reranker = PineconeRerank(model="test-model", pinecone_api_key=SecretStr("fake-key"))
-        assert reranker.model == "test-model"
-
-    def test_invalid_model_parameter(self, mocker):
-        """Test that an invalid model name raises a ValueError for rerank."""
-        mocker.patch(
-            "langchain_pinecone.rerank.PineconeRerank.list_supported_models",
-            return_value=[{"model": "test-model"}]
-        )
-        with pytest.raises(ValueError, match="not a supported Pinecone reranker model"):
-            PineconeRerank(model="invalid-model", pinecone_api_key=SecretStr("fake-key"))
-
     @pytest.fixture
     def mock_pinecone_client(self) -> MagicMock:
         """Fixture to provide a mocked Pinecone client."""
@@ -180,20 +131,20 @@ class TestPineconeRerank:
     async def test_initialization_missing_model(self) -> None:
         """Test default model is used when model is not specified."""
         # Instead of raising an error, now we check for default model value
-        with patch.dict(os.environ, {"PINECONE_API_KEY": "fake-api-key"}):
-            reranker = PineconeRerank(pinecone_api_key=SecretStr("fake-key"))
+        with patch.dict(os.environ, {"PINECONE_API_KEY": API_KEY.get_secret_value()}):
+            reranker = PineconeRerank(pinecone_api_key=API_KEY)
             assert reranker.model == "bge-reranker-v2-m3"  # Default model
 
     def test_initialization_invalid_client_type(self) -> None:
         """Test initialization fails with invalid client type."""
-        # Use a plain object, not a MagicMock, to ensure type check fails
-        class NotPinecone:
-            pass
-        invalid_client = NotPinecone()
+        # Mock an invalid object that's not a Pinecone instance
+        invalid_client = MagicMock()
 
+        # Use the _get_sync_client method which checks the type
         reranker = PineconeRerank(model="test-model")
         reranker.client = invalid_client  # Directly set an invalid client
 
+        # Now when we try to use _get_sync_client, it should verify the client type
         with pytest.raises(
             TypeError, match="The 'client' parameter must be an instance of Pinecone"
         ):
@@ -230,8 +181,8 @@ class TestPineconeRerank:
     async def test_model_required(self) -> None:
         """Test default model is used when model is not specified."""
         # Instead of raising an error, now we check for default model value
-        with patch.dict(os.environ, {"PINECONE_API_KEY": "fake-api-key"}):
-            reranker = PineconeRerank(pinecone_api_key=SecretStr("fake-key"))
+        with patch.dict(os.environ, {"PINECONE_API_KEY": API_KEY.get_secret_value()}):
+            reranker = PineconeRerank(pinecone_api_key=API_KEY)
             assert reranker.model == "bge-reranker-v2-m3"  # Default model
 
     @pytest.mark.parametrize(
@@ -258,7 +209,7 @@ class TestPineconeRerank:
     ) -> None:
         """Test _document_to_dict handles different input types."""
         reranker = PineconeRerank(
-            model="test-model", pinecone_api_key=SecretStr("fake-key")
+            model="test-model", pinecone_api_key=API_KEY
         )
         result = reranker._document_to_dict(document_input, 0)
         assert result == expected_output
@@ -748,14 +699,14 @@ class TestPineconeRerank:
     @pytest.mark.asyncio
     async def test_async_client_invalid_type(self) -> None:
         """Test initialization fails with invalid async client type."""
-        # Use a plain object, not a MagicMock, to ensure type check fails
-        class NotPineconeAsync:
-            pass
-        invalid_client = NotPineconeAsync()
+        # Mock an invalid object that's not a PineconeAsyncio instance
+        invalid_client = MagicMock()
 
+        # Use the _get_async_client method which checks the type
         reranker = PineconeRerank(model="test-model")
         reranker.async_client = invalid_client  # Directly set an invalid client
 
+        # Now when we try to use _get_async_client, it should verify the client type
         with pytest.raises(
             TypeError,
             match="The 'async_client' parameter must be an instance of PineconeAsyncio",

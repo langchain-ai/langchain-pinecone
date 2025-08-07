@@ -9,6 +9,7 @@ from pinecone import (
 
 Matrix = Union[List[List[float]], List[np.ndarray], np.ndarray]
 
+
 class DistanceStrategy(str, Enum):
     """Enumerator of the Distance strategies for calculating distances
     between vectors."""
@@ -188,7 +189,10 @@ def sparse_cosine_similarity(X: SparseValues, Y: List[SparseValues]) -> np.ndarr
 
     return similarities
 
-def get_pinecone_supported_models(api_key: str, model_type: str = None, vector_type: str = None):
+
+def get_pinecone_supported_models(
+    api_key: str, model_type: Optional[str] = None, vector_type: Optional[str] = None
+) -> list:
     """Fetch supported models from Pinecone dynamically.
     Args:
         api_key: Pinecone API key
@@ -199,19 +203,26 @@ def get_pinecone_supported_models(api_key: str, model_type: str = None, vector_t
     Raises:
         ValueError: if model_type or vector_type is not allowed
     """
+
     class _ModelParamsModel:
         model_type: Optional[Literal["embed", "rerank"]] = None
         vector_type: Optional[Literal["dense", "sparse"]] = None
 
         @classmethod
-        def validate(cls, model_type, vector_type):
+        def validate(
+            cls, model_type: Optional[str], vector_type: Optional[str]
+        ) -> tuple[Optional[str], Optional[str]]:
             # Pydantic-style validation
             allowed_model_types = ("embed", "rerank", None)
             allowed_vector_types = ("dense", "sparse", None)
             if model_type not in allowed_model_types:
-                raise ValueError(f"model_type must be one of {allowed_model_types}, got {model_type}")
+                raise ValueError(
+                    f"model_type must be one of {allowed_model_types}, got {model_type}"
+                )
             if vector_type not in allowed_vector_types:
-                raise ValueError(f"vector_type must be one of {allowed_vector_types}, got {vector_type}")
+                raise ValueError(
+                    f"vector_type must be one of {allowed_vector_types}, got {vector_type}"
+                )
             return model_type, vector_type
 
     # Validate arguments

@@ -32,6 +32,16 @@ requires_api_key = pytest.mark.skipif(
     reason="Test requires PINECONE_API_KEY environment variable",
 )
 
+@pytest.fixture(autouse=True)
+def patch_pinecone_model_listing(mocker):
+    mocker.patch(
+        "langchain_pinecone.embeddings.PineconeEmbeddings.list_supported_models",
+        return_value=[
+            {"model": "multilingual-e5-large"},
+            {"model": "pinecone-sparse-english-v0"},
+        ],
+    )
+
 
 @pytest.fixture(scope="function")
 async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Self, Sequence, Union
 
 from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class PineconeRerank(BaseDocumentCompressor):
-
     """Document compressor that uses `Pinecone Rerank API`."""
 
     client: Optional[Pinecone] = None
@@ -30,11 +29,17 @@ class PineconeRerank(BaseDocumentCompressor):
         description="Model to use for reranking. Default is 'bge-reranker-v2-m3'.",
     )
     """Model to use for reranking."""
-    pinecone_api_key: Optional[SecretStr] = Field(
-        default_factory=secret_from_env("PINECONE_API_KEY", default=None)
+    pinecone_api_key: SecretStr = Field(
+        default_factory=secret_from_env(
+            "PINECONE_API_KEY",
+            error_message="Pinecone API key not found. Please set the PINECONE_API_KEY "
+            "environment variable or pass it via `pinecone_api_key`.",
+        ),
     )
-    """Pinecone API key. Must be specified directly or via environment variable 
-    PINECONE_API_KEY."""
+    """Pinecone API key. 
+    
+    If not provided, will look for the PINECONE_API_KEY environment variable."""
+
     rank_fields: Optional[List[str]] = None
     """Fields to use for reranking when documents are dictionaries."""
     return_documents: bool = True
@@ -46,20 +51,23 @@ class PineconeRerank(BaseDocumentCompressor):
     )
 
     @model_validator(mode="after")
-    def validate_model_supported(self):
+    def validate_model_supported(self) -> Self:
         """Validate that the provided model is supported by Pinecone for reranking."""
-        api_key = self._get_api_key()
+        api_key = self.pinecone_api_key.get_secret_value()
         supported = self.list_supported_models(api_key)
         supported_names = [m["model"] for m in supported]
         if self.model not in supported_names:
-            raise ValueError(f"Model '{self.model}' is not a supported Pinecone reranker model. Supported: {supported_names}")
+            raise ValueError(
+                f"Model '{self.model}' is not a supported Pinecone reranker model. Supported: {supported_names}"
+            )
         return self
 
-    @classmethod
-    def list_supported_models(cls, pinecone_api_key: str = None, vector_type: str = None):
+    def list_supported_models(self, vector_type: Optional[str] = None) -> list:
         """Return a list of supported embedding models from Pinecone."""
-        return get_pinecone_supported_models(pinecone_api_key, model_type="rerank", vector_type=vector_type)
-
+        api_key = self.pinecone_api_key.get_secret_value()
+        return get_pinecone_supported_models(
+            api_key, model_type="rerank", vector_type=vector_type
+        )
 
     def _get_api_key(self) -> Optional[str]:
         """Get the API key from SecretStr or directly."""
