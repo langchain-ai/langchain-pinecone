@@ -56,9 +56,9 @@ class PineconeRerank(BaseDocumentCompressor):
         return self
 
     @classmethod
-    def list_supported_models(cls, pinecone_api_key: str = None, model_type:str = "rerank", vector_type: str = None):
+    def list_supported_models(cls, pinecone_api_key: str = None, vector_type: str = None):
         """Return a list of supported embedding models from Pinecone."""
-        return get_pinecone_supported_models(pinecone_api_key, model_type=model_type, vector_type=vector_type)
+        return get_pinecone_supported_models(pinecone_api_key, model_type="rerank", vector_type=vector_type)
 
 
     def _get_api_key(self) -> Optional[str]:

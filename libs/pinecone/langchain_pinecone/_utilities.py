@@ -9,8 +9,6 @@ from pinecone import (
 
 Matrix = Union[List[List[float]], List[np.ndarray], np.ndarray]
 
-
-
 class DistanceStrategy(str, Enum):
     """Enumerator of the Distance strategies for calculating distances
     between vectors."""
