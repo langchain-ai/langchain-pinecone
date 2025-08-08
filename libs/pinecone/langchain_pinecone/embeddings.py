@@ -9,6 +9,11 @@ from pinecone import (
 )
 from pinecone import SparseValues
 
+from langchain_pinecone._utilities import (
+    aget_pinecone_supported_models,
+    get_pinecone_supported_models,
+)
+
 # Conditional import for EmbeddingsList based on Pinecone version
 try:
     from pinecone.core.openapi.inference.model.embeddings_list import EmbeddingsList
@@ -94,7 +99,7 @@ class PineconeEmbeddings(BaseModel, Embeddings):
             error_message="Pinecone API key not found. Please set the PINECONE_API_KEY "
             "environment variable or pass it via `pinecone_api_key`.",
         ),
-        alias="api_key",
+        alias="pinecone_api_key",
     )
     """Pinecone API key. 
     
@@ -138,6 +143,31 @@ class PineconeEmbeddings(BaseModel, Embeddings):
                 if key not in values:
                     values[key] = value
         return values
+
+    def list_supported_models(self, vector_type: Optional[str] = None) -> list:
+        """Return a list of supported embedding models from Pinecone."""
+        api_key = self.pinecone_api_key.get_secret_value()
+        return get_pinecone_supported_models(
+            api_key, model_type="embed", vector_type=vector_type
+        )
+
+    async def alist_supported_models(self, vector_type: Optional[str] = None) -> list:
+        """Return a list of supported embedding models from Pinecone asynchronously."""
+        api_key = self.pinecone_api_key.get_secret_value()
+        return await aget_pinecone_supported_models(
+            api_key, model_type="embed", vector_type=vector_type
+        )
+
+    @model_validator(mode="after")
+    def validate_model_supported(self) -> Self:
+        """Validate that the provided model is supported by Pinecone."""
+        supported = self.list_supported_models()
+        supported_names = [m["model"] for m in supported]
+        if self.model not in supported_names:
+            raise ValueError(
+                f"Model '{self.model}' is not a supported Pinecone embedding model. Supported: {supported_names}"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_environment(self) -> Self:
