@@ -13,7 +13,7 @@ API_KEY = convert_to_secret_str("NOT_A_VALID_KEY")
 
 
 @pytest.fixture(autouse=True)
-def patch_pinecone_rerank_model_listing(mocker):
+def patch_pinecone_rerank_model_listing(mocker: Any) -> None:
     mocker.patch(
         "langchain_pinecone.rerank.PineconeRerank.list_supported_models",
         return_value=[
@@ -727,7 +727,7 @@ class TestPineconeRerank:
             await reranker._get_async_client()
 
     @pytest.mark.asyncio
-    async def test_alist_supported_models(self, mocker):
+    async def test_alist_supported_models(self, mocker: Any) -> None:
         """Test the async list_supported_models method."""
         mock_response = {
             "models": [
@@ -749,7 +749,7 @@ class TestPineconeRerank:
         assert result == mock_response
 
     @pytest.mark.asyncio
-    async def test_alist_supported_models_with_vector_type(self, mocker):
+    async def test_alist_supported_models_with_vector_type(self, mocker: Any) -> None:
         """Test the async list_supported_models method with vector_type filter."""
         mock_response = {
             "models": [

@@ -13,9 +13,10 @@ requires_api_key = pytest.mark.skipif(
 
 @requires_api_key
 @pytest.mark.asyncio
-async def test_aget_pinecone_supported_models_integration():
+async def test_aget_pinecone_supported_models_integration() -> None:
     """Test the async function with real Pinecone API."""
     api_key = os.environ.get("PINECONE_API_KEY")
+    assert api_key is not None
 
     # Test basic call without filters
     result = await aget_pinecone_supported_models(api_key)
@@ -45,9 +46,10 @@ async def test_aget_pinecone_supported_models_integration():
 
 @requires_api_key
 @pytest.mark.asyncio
-async def test_aget_pinecone_supported_models_with_combined_filters():
+async def test_aget_pinecone_supported_models_with_combined_filters() -> None:
     """Test the async function with combined filters."""
     api_key = os.environ.get("PINECONE_API_KEY")
+    assert api_key is not None
 
     # Test with both model_type and vector_type filters
     dense_embed_models = await aget_pinecone_supported_models(

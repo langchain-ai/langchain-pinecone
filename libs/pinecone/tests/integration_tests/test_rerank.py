@@ -2,6 +2,7 @@ import os
 
 import pytest
 from langchain_core.documents import Document
+from typing import Any
 
 from langchain_pinecone import PineconeRerank
 
@@ -12,7 +13,7 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture(autouse=True)
-def patch_pinecone_rerank_model_listing(mocker):
+def patch_pinecone_rerank_model_listing(mocker: Any) -> None:
     mocker.patch(
         "langchain_pinecone.rerank.PineconeRerank.list_supported_models",
         return_value=[

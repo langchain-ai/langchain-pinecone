@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Self, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
@@ -54,7 +54,7 @@ class PineconeRerank(BaseDocumentCompressor):
     )
 
     @model_validator(mode="after")
-    def validate_model_supported(self) -> Self:
+    def validate_model_supported(self) -> Any:
         """Validate that the provided model is supported by Pinecone for reranking."""
         supported = self.list_supported_models()
         supported_names = [m["model"] for m in supported]

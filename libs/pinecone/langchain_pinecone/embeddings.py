@@ -99,7 +99,7 @@ class PineconeEmbeddings(BaseModel, Embeddings):
             error_message="Pinecone API key not found. Please set the PINECONE_API_KEY "
             "environment variable or pass it via `pinecone_api_key`.",
         ),
-        alias="api_key",
+        alias="pinecone_api_key",
     )
     """Pinecone API key. 
     

@@ -1,7 +1,7 @@
 import os
 import time
 from datetime import datetime
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import pytest
 from langchain_core.documents import Document
@@ -34,7 +34,7 @@ requires_api_key = pytest.mark.skipif(
 
 
 @pytest.fixture(autouse=True)
-def patch_pinecone_model_listing(mocker):
+def patch_pinecone_model_listing(mocker: Any) -> None:
     mocker.patch(
         "langchain_pinecone.embeddings.PineconeEmbeddings.list_supported_models",
         return_value=[
@@ -50,7 +50,7 @@ async def embd_client() -> AsyncGenerator[PineconeEmbeddings, None]:
         pytest.skip("Test requires PINECONE_API_KEY environment variable")
     client = PineconeEmbeddings(
         model=MODEL,
-        api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
+        pinecone_api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
         dimension=DIMENSION,
     )
     yield client
@@ -63,7 +63,7 @@ async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]
         pytest.skip("Test requires PINECONE_API_KEY environment variable")
     client = PineconeSparseEmbeddings(
         model=SPARSE_MODEL_NAME,
-        api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
+        pinecone_api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
         dimension=DIMENSION,
     )
     yield client
