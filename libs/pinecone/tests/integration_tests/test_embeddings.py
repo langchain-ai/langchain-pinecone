@@ -28,8 +28,7 @@ NAMESPACE_NAME = "test_namespace"
 
 # Check for required environment variables
 requires_api_key = pytest.mark.skipif(
-    "PINECONE_API_KEY" not in os.environ,
-    reason="Test requires PINECONE_API_KEY environment variable",
+    not os.environ.get("PINECONE_API_KEY"), reason="Pinecone API key not set"
 )
 
 
