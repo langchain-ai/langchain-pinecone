@@ -1,8 +1,8 @@
 import os
+from typing import Any
 
 import pytest
 from langchain_core.documents import Document
-from typing import Any
 
 from langchain_pinecone import PineconeRerank
 
