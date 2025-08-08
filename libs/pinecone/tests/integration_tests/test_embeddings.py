@@ -32,6 +32,7 @@ requires_api_key = pytest.mark.skipif(
     reason="Test requires PINECONE_API_KEY environment variable",
 )
 
+
 @pytest.fixture(autouse=True)
 def patch_pinecone_model_listing(mocker):
     mocker.patch(

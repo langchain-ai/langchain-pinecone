@@ -10,7 +10,10 @@ from langchain_core.utils import secret_from_env
 from pinecone import Pinecone, PineconeAsyncio
 from pydantic import ConfigDict, Field, SecretStr, model_validator
 
-from langchain_pinecone._utilities import get_pinecone_supported_models
+from langchain_pinecone._utilities import (
+    aget_pinecone_supported_models,
+    get_pinecone_supported_models,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +56,7 @@ class PineconeRerank(BaseDocumentCompressor):
     @model_validator(mode="after")
     def validate_model_supported(self) -> Self:
         """Validate that the provided model is supported by Pinecone for reranking."""
-        api_key = self.pinecone_api_key.get_secret_value()
-        supported = self.list_supported_models(api_key)
+        supported = self.list_supported_models()
         supported_names = [m["model"] for m in supported]
         if self.model not in supported_names:
             raise ValueError(
@@ -66,6 +68,13 @@ class PineconeRerank(BaseDocumentCompressor):
         """Return a list of supported embedding models from Pinecone."""
         api_key = self.pinecone_api_key.get_secret_value()
         return get_pinecone_supported_models(
+            api_key, model_type="rerank", vector_type=vector_type
+        )
+
+    async def alist_supported_models(self, vector_type: Optional[str] = None) -> list:
+        """Return a list of supported reranker models from Pinecone asynchronously."""
+        api_key = self.pinecone_api_key.get_secret_value()
+        return await aget_pinecone_supported_models(
             api_key, model_type="rerank", vector_type=vector_type
         )
 

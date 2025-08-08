@@ -135,3 +135,48 @@ class TestPineconeEmbeddingsConfig:
         client = embeddings.async_client
         assert client is not None
         assert isinstance(client, PineconeAsyncio)
+
+    @pytest.mark.asyncio
+    async def test_alist_supported_models(self, mocker):
+        """Test the async list_supported_models method."""
+        mock_response = {
+            "models": [
+                {"model": "multilingual-e5-large", "type": "embed"},
+                {"model": "pinecone-sparse-english-v0", "type": "embed"},
+            ]
+        }
+
+        # Mock the aget_pinecone_supported_models function
+        mocker.patch(
+            "langchain_pinecone.embeddings.aget_pinecone_supported_models",
+            return_value=mock_response,
+        )
+
+        embeddings = PineconeEmbeddings(model=MODEL_NAME, api_key=API_KEY)
+        result = await embeddings.alist_supported_models()
+
+        assert result == mock_response
+
+    @pytest.mark.asyncio
+    async def test_alist_supported_models_with_vector_type(self, mocker):
+        """Test the async list_supported_models method with vector_type filter."""
+        mock_response = {
+            "models": [
+                {
+                    "model": "multilingual-e5-large",
+                    "type": "embed",
+                    "vector_type": "dense",
+                },
+            ]
+        }
+
+        # Mock the aget_pinecone_supported_models function
+        mocker.patch(
+            "langchain_pinecone.embeddings.aget_pinecone_supported_models",
+            return_value=mock_response,
+        )
+
+        embeddings = PineconeEmbeddings(model=MODEL_NAME, api_key=API_KEY)
+        result = await embeddings.alist_supported_models(vector_type="dense")
+
+        assert result == mock_response

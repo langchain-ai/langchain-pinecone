@@ -4,20 +4,35 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.documents import Document
+from langchain_core.utils import convert_to_secret_str
 from pinecone import Pinecone, PineconeAsyncio
-from pydantic import SecretStr
 
 from langchain_pinecone.rerank import PineconeRerank
-from langchain_core.utils import convert_to_secret_str
 
 API_KEY = convert_to_secret_str("NOT_A_VALID_KEY")
+
 
 @pytest.fixture(autouse=True)
 def patch_pinecone_rerank_model_listing(mocker):
     mocker.patch(
         "langchain_pinecone.rerank.PineconeRerank.list_supported_models",
-        return_value=[{"model": "test-model"}, {"model": "cohere-rerank-3.5"}, {"model": "bge-reranker-v2-m3"}]
+        return_value=[
+            {"model": "test-model"},
+            {"model": "cohere-rerank-3.5"},
+            {"model": "bge-reranker-v2-m3"},
+        ],
     )
+    mocker.patch(
+        "langchain_pinecone.rerank.aget_pinecone_supported_models",
+        return_value={
+            "models": [
+                {"model": "test-model"},
+                {"model": "cohere-rerank-3.5"},
+                {"model": "bge-reranker-v2-m3"},
+            ]
+        },
+    )
+
 
 # helper function for testing shared assertions in later rerank tests
 def check_rerank_call_and_results(
@@ -208,9 +223,7 @@ class TestPineconeRerank:
         self, document_input: Any, expected_output: Dict[str, Any]
     ) -> None:
         """Test _document_to_dict handles different input types."""
-        reranker = PineconeRerank(
-            model="test-model", pinecone_api_key=API_KEY
-        )
+        reranker = PineconeRerank(model="test-model", pinecone_api_key=API_KEY)
         result = reranker._document_to_dict(document_input, 0)
         assert result == expected_output
 
@@ -712,3 +725,45 @@ class TestPineconeRerank:
             match="The 'async_client' parameter must be an instance of PineconeAsyncio",
         ):
             await reranker._get_async_client()
+
+    @pytest.mark.asyncio
+    async def test_alist_supported_models(self, mocker):
+        """Test the async list_supported_models method."""
+        mock_response = {
+            "models": [
+                {"model": "test-model", "type": "rerank"},
+                {"model": "cohere-rerank-3.5", "type": "rerank"},
+                {"model": "bge-reranker-v2-m3", "type": "rerank"},
+            ]
+        }
+
+        # Mock the aget_pinecone_supported_models function
+        mocker.patch(
+            "langchain_pinecone.rerank.aget_pinecone_supported_models",
+            return_value=mock_response,
+        )
+
+        rerank = PineconeRerank(model="test-model", pinecone_api_key=API_KEY)
+        result = await rerank.alist_supported_models()
+
+        assert result == mock_response
+
+    @pytest.mark.asyncio
+    async def test_alist_supported_models_with_vector_type(self, mocker):
+        """Test the async list_supported_models method with vector_type filter."""
+        mock_response = {
+            "models": [
+                {"model": "test-model", "type": "rerank", "vector_type": "dense"},
+            ]
+        }
+
+        # Mock the aget_pinecone_supported_models function
+        mocker.patch(
+            "langchain_pinecone.rerank.aget_pinecone_supported_models",
+            return_value=mock_response,
+        )
+
+        rerank = PineconeRerank(model="test-model", pinecone_api_key=API_KEY)
+        result = await rerank.alist_supported_models(vector_type="dense")
+
+        assert result == mock_response
