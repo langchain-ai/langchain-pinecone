@@ -182,6 +182,7 @@ class PineconeVectorStore(VectorStore):
 
     _index: Optional[_Index] = None
     _async_index: Optional[_IndexAsyncio] = None
+    _index_host: str
 
     def __init__(
         self,
@@ -197,6 +198,7 @@ class PineconeVectorStore(VectorStore):
         *,
         pinecone_api_key: Optional[str] = None,
         index_name: Optional[str] = None,
+        host: Optional[str] = None,
     ):
         if embedding is None:
             raise ValueError("Embedding must be provided")
@@ -208,6 +210,9 @@ class PineconeVectorStore(VectorStore):
         self._namespace = namespace
         self.distance_strategy = distance_strategy
 
+        _index_host = host or os.environ.get("PINECONE_HOST")
+        if index and _index_host:
+            logger.warning("Index host ignored when initializing with index object.")
         if index:
             # supports old way of initializing externally
             if isinstance(index, _IndexAsyncio):
@@ -228,16 +233,25 @@ class PineconeVectorStore(VectorStore):
                 )
             self._pinecone_api_key = _pinecone_api_key
 
+            # Store the host parameter or get from environment variable
             _index_name = index_name or os.environ.get("PINECONE_INDEX_NAME") or ""
-            if not _index_name:
+            if not _index_name and not _index_host:
                 raise ValueError(
                     "Pinecone index name must be provided in either `index_name` "
                     "or `PINECONE_INDEX_NAME` environment variable"
                 )
-            self._pinecone_api_key = _pinecone_api_key
 
-            client = PineconeClient(api_key=_pinecone_api_key, source_tag="langchain")
-            self._index = client.Index(name=_index_name)
+            # Only create sync index if no host is provided
+            if not _index_host:
+                client = PineconeClient(
+                    api_key=_pinecone_api_key, source_tag="langchain"
+                )
+                _index = client.Index(name=_index_name)
+                self._index = _index
+                # Cache host from the created index
+                self._index_host = _index.config.host
+            else:
+                self._index_host = _index_host
 
     @property
     def index(self) -> _Index:
@@ -248,17 +262,24 @@ class PineconeVectorStore(VectorStore):
             client = PineconeClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
             )
-            return client.Index(host=self._index_host)
+            self._index = client.Index(host=self._index_host)
         return self._index
 
     @property
-    def async_index(self) -> _IndexAsyncio:
+    async def async_index(self) -> _IndexAsyncio:
         """Get asynchronous index instance."""
         if self._async_index is None:
-            client = PineconeAsyncioClient(
+            async with PineconeAsyncioClient(
                 api_key=self._pinecone_api_key, source_tag="langchain"
-            )
-            return client.IndexAsyncio(host=self.index.config.host)
+            ) as client:
+                # Priority: constructor parameter → cached host → environment variable
+                host = self._index_host
+                if not host:
+                    raise ValueError(
+                        "Index host must be available either from cached index, "
+                        "PINECONE_HOST environment variable, or host parameter"
+                    )
+                return client.IndexAsyncio(host=host)
         return self._async_index
 
     @property
@@ -387,15 +408,18 @@ class PineconeVectorStore(VectorStore):
         for metadata, text in zip(metadatas, texts):
             metadata[self._text_key] = text
 
-        # For loops to avoid memory issues and optimize when using HTTP based embeddings
-        for i in range(0, len(texts), embedding_chunk_size):
-            chunk_texts = texts[i : i + embedding_chunk_size]
-            chunk_ids = ids[i : i + embedding_chunk_size]
-            chunk_metadatas = metadatas[i : i + embedding_chunk_size]
-            embeddings = await self._embedding.aembed_documents(chunk_texts)
-            vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+        idx: _IndexAsyncio = await self.async_index
 
-            async with self.async_index as idx:
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
+            # For loops to avoid memory issues and optimize when using HTTP based embeddings
+            for i in range(0, len(texts), embedding_chunk_size):
+                chunk_texts = texts[i : i + embedding_chunk_size]
+                chunk_ids = ids[i : i + embedding_chunk_size]
+                chunk_metadatas = metadatas[i : i + embedding_chunk_size]
+                embeddings = await self._embedding.aembed_documents(chunk_texts)
+                vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+
                 # Split into batches and upsert asynchronously
                 tasks = []
                 for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
@@ -411,12 +435,43 @@ class PineconeVectorStore(VectorStore):
 
         return ids
 
+    def similarity_search_by_vector(
+        self,
+        embedding: List[float],
+        k: int = 4,
+        **kwargs: Any,
+    ) -> List[Document]:
+        """Return documents most similar to the given embedding vector.
+
+        Wraps `similarity_search_by_vector_with_score` but strips the scores.
+        """
+        docs_and_scores = self.similarity_search_by_vector_with_score(
+            embedding=embedding, k=k, **kwargs
+        )
+        return [doc for doc, _ in docs_and_scores]
+
+    async def asimilarity_search_by_vector(
+        self,
+        embedding: List[float],
+        k: int = 4,
+        **kwargs: Any,
+    ) -> List[Document]:
+        """Return documents most similar to the given embedding vector asynchronously.
+
+        Wraps `asimilarity_search_by_vector_with_score` but strips the scores.
+        """
+        docs_and_scores = await self.asimilarity_search_by_vector_with_score(
+            embedding=embedding, k=k, **kwargs
+        )
+        return [doc for doc, _ in docs_and_scores]
+
     def similarity_search_with_score(
         self,
         query: str,
         k: int = 4,
         filter: Optional[dict] = None,
         namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to query, along with scores.
 
@@ -430,7 +485,11 @@ class PineconeVectorStore(VectorStore):
             List of Documents most similar to the query and score for each
         """
         return self.similarity_search_by_vector_with_score(
-            self._embedding.embed_query(query), k=k, filter=filter, namespace=namespace
+            self._embedding.embed_query(query),
+            k=k,
+            filter=filter,
+            namespace=namespace,
+            **kwargs,
         )
 
     async def asimilarity_search_with_score(
@@ -439,6 +498,7 @@ class PineconeVectorStore(VectorStore):
         k: int = 4,
         filter: Optional[dict] = None,
         namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> list[tuple[Document, float]]:
         """Asynchronously return pinecone documents most similar to query, along with scores.
 
@@ -456,6 +516,7 @@ class PineconeVectorStore(VectorStore):
             k=k,
             filter=filter,
             namespace=namespace,
+            **kwargs,
         )
 
     def similarity_search_by_vector_with_score(
@@ -463,13 +524,12 @@ class PineconeVectorStore(VectorStore):
         embedding: List[float],
         *,
         k: int = 4,
-        filter: Optional[dict] = None,
-        namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to embedding, along with scores."""
+        namespace = kwargs.get("namespace", self._namespace)
+        filter = kwargs.get("filter")
 
-        if namespace is None:
-            namespace = self._namespace
         docs = []
         results = self.index.query(
             vector=embedding,
@@ -501,15 +561,16 @@ class PineconeVectorStore(VectorStore):
         embedding: List[float],
         *,
         k: int = 4,
-        filter: Optional[dict] = None,
-        namespace: Optional[str] = None,
+        **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to embedding, along with scores asynchronously."""
-        if namespace is None:
-            namespace = self._namespace
+        namespace = kwargs.get("namespace", self._namespace)
+        filter = kwargs.get("filter")
 
         docs = []
-        async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=k,
@@ -682,7 +743,9 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=fetch_k,
@@ -953,24 +1016,24 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        if delete_all:
-            async with self.async_index as idx:
+        idx = await self.async_index
+        # Manage _IndexAsyncio HTTP client lifespan
+        async with idx:
+            if delete_all:
                 await idx.delete(delete_all=True, namespace=namespace, **kwargs)
-        elif ids is not None:
-            chunk_size = 1000
-            async with self.async_index as idx:
+            elif ids is not None:
+                chunk_size = 1000
                 tasks = []
                 for i in range(0, len(ids), chunk_size):
                     chunk = ids[i : i + chunk_size]
                     tasks.append(idx.delete(ids=chunk, namespace=namespace, **kwargs))
                 await asyncio.gather(*tasks)
-        elif filter is not None:
-            async with self.async_index as idx:
+            elif filter is not None:
                 await idx.delete(filter=filter, namespace=namespace, **kwargs)
-        else:
-            raise ValueError("Either ids, delete_all, or filter must be provided.")
+            else:
+                raise ValueError("Either ids, delete_all, or filter must be provided.")
 
-        return None
+            return None
 
 
 @deprecated(since="0.0.3", removal="1.0.0", alternative="PineconeVectorStore")

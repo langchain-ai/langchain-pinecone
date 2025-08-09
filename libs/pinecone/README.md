@@ -13,6 +13,36 @@ And you should configure credentials by setting the following environment variab
 - `PINECONE_API_KEY`
 - `OPENAI_API_KEY` (optional, for embeddings to use)
 
+## Development
+
+### Running Tests
+
+The test suite includes both unit tests and integration tests. To run the tests:
+
+```bash
+# Run unit tests only
+make test
+
+# Run integration tests (requires environment variables)
+make integration_test
+```
+
+#### Required Environment Variables for Tests
+
+Integration tests require the following environment variables:
+
+- `PINECONE_API_KEY`: Required for all integration tests
+- `OPENAI_API_KEY`: Optional, required only for OpenAI embedding tests
+
+You can set these environment variables before running the tests:
+
+```bash
+export PINECONE_API_KEY="your-api-key"
+export OPENAI_API_KEY="your-openai-key"  # Optional
+```
+
+If these environment variables are not set, the integration tests that require them will be skipped.
+
 ## Usage
 
 ### Initialization

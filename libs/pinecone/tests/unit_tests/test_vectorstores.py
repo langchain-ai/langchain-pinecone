@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Type
 from unittest.mock import ANY, Mock, call
 
 import pytest
-from pinecone import SparseValues  # type: ignore[import-untyped]
+from pinecone import PineconeAsyncio, SparseValues  # type: ignore[import-untyped]
 from pytest_mock import AsyncMockType, MockerFixture, MockType
 
 from langchain_pinecone.embeddings import PineconeEmbeddings, PineconeSparseEmbeddings
@@ -41,18 +41,18 @@ def mock_sparse_embedding(mocker: MockerFixture) -> AsyncMockType:
 
 
 @pytest.fixture
-def mock_async_index(mocker: MockerFixture) -> AsyncMockType:
+def mock_async_index(mocker: MockerFixture) -> MockType:
     """Fixture for mock async index."""
     # Import the actual _IndexAsyncio class to use as spec
     from pinecone.data import _IndexAsyncio  # type:ignore[import-untyped]
 
-    mock_async_index = mocker.AsyncMock(spec=_IndexAsyncio)
+    mock_async_index = mocker.Mock(spec=_IndexAsyncio)
     mock_async_index.config = mocker.Mock()
     mock_async_index.config.host = "example.org"
     mock_async_index.config.api_key = "test"
+    mock_async_index.upsert = mocker.AsyncMock(return_value=None)
     mock_async_index.__aenter__ = mocker.AsyncMock(return_value=mock_async_index)
     mock_async_index.__aexit__ = mocker.AsyncMock(return_value=None)
-    mock_async_index.upsert = mocker.AsyncMock(return_value=None)
     mock_async_index.describe_index_stats = mocker.Mock(
         return_value={"vector_type": "sparse"}
     )
@@ -69,11 +69,49 @@ def mock_index(mocker: MockerFixture) -> MockType:
     mock_index.config = mocker.Mock()
     mock_index.config.host = "example.org"
     mock_index.config.api_key = "test"
-    mock_index.upsert = mocker.Mock(return_value=mocker.Mock())
+    mock_index.upsert = mocker.Mock(return_value=None)
     mock_index.describe_index_stats = mocker.Mock(
         return_value={"vector_type": "sparse"}
     )
     return mock_index
+
+
+@pytest.fixture
+def mock_pinecone_client(mocker: MockerFixture, mock_index: MockType) -> AsyncMockType:
+    mock_pinecone_client = mocker.patch(
+        "langchain_pinecone.vectorstores.PineconeClient"
+    )
+    mock_pinecone_client.return_value.Index.return_value = mock_index
+    return mock_pinecone_client
+
+
+@pytest.fixture
+def mock_pinecone_async_client(
+    mocker: MockerFixture, mock_async_index: AsyncMockType
+) -> AsyncMockType:
+    mock_pinecone_async_client = mocker.patch(
+        "langchain_pinecone.vectorstores.PineconeAsyncioClient"
+    )
+    instance = mock_pinecone_async_client.return_value
+    instance.__aenter__.return_value = instance
+    instance.__aexit__.return_value = None
+    instance.IndexAsyncio.return_value = mock_async_index
+    return mock_pinecone_async_client
+
+
+@pytest.fixture
+def mock_async_client(
+    mocker: MockerFixture, mock_async_index: MockType
+) -> AsyncMockType:
+    mock_async_client = mocker.AsyncMock(spec=PineconeAsyncio)
+    mock_async_client.IndexAsyncio.return_value = mock_async_index
+    mock_async_client.__aenter__.return_value = mock_async_client
+    mock_client_class = mocker.patch(
+        "langchain_pinecone.vectorstores.PineconeAsyncioClient",
+        return_value=mock_async_client,
+    )
+
+    return mock_client_class
 
 
 def test_id_prefix() -> None:
@@ -115,6 +153,155 @@ class TestVectorstores:
         text_key = "xyz"
         vectorstore_cls(index=mock_index, embedding=mock_embedding, text_key=text_key)
 
+    def test_initialization_with_index_name__caches_host(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_pinecone_client: MockType,
+    ) -> None:
+        """Test integration vectorstore initialization with index name."""
+        # mock index
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+        # Assert no calls to PineconeClient mage
+        vectorstore = vectorstore_cls(
+            embedding=mock_embedding,
+            pinecone_api_key="test-key",
+            index_name="test-index",
+        )
+        # Verify host is properly cached
+        assert (
+            vectorstore._index_host
+            == mock_pinecone_client.return_value.Index.return_value.config.host
+        )
+        mock_pinecone_client.return_value.Index.assert_called_once_with(
+            name="test-index"
+        )
+
+    def test_initialization_without_host_or_index_name__raises_valueerror(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+    ) -> None:
+        """Test integration vectorstore initialization without host or index name."""
+        # mock index
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+        with pytest.raises(ValueError):
+            vectorstore_cls(
+                embedding=mock_embedding,
+                pinecone_api_key="test-key",
+            )
+
+    def test_host_parameter__avoids_sync_index_creation(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_pinecone_client: MockType,
+    ) -> None:
+        """Test that providing host parameter avoids creating unnecessary sync index."""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        # Create vectorstore with host parameter
+        vectorstore = vectorstore_cls(
+            pinecone_api_key="test-key",
+            host="direct-host.pinecone.io",
+            embedding=mock_embedding,
+            text_key="text",
+        )
+
+        # Verify that PineconeClient was NOT called since host was provided
+        mock_pinecone_client.assert_not_called()
+
+        # Verify host is properly cached
+        assert vectorstore._index_host == "direct-host.pinecone.io"
+
+        # Verify that _index is None since no sync index was created
+        assert vectorstore._index is None
+
+    @pytest.mark.asyncio
+    async def test_async_index__uses_cached_host_without_sync_calls(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_pinecone_async_client: AsyncMockType,
+    ) -> None:
+        """Test that async_index uses cached host without making sync calls."""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        # Create vectorstore with host parameter (avoids sync index creation)
+        vectorstore = vectorstore_cls(
+            pinecone_api_key="test-key",
+            host="cached-host.pinecone.io",
+            embedding=mock_embedding,
+            text_key="text",
+        )
+
+        # Access async_index property
+        result = await vectorstore.async_index
+
+        # Verify async client was called with the cached host
+        mock_pinecone_async_client.return_value.IndexAsyncio.assert_called_once_with(
+            host="cached-host.pinecone.io"
+        )
+
+        # Verify result is the mock async index
+        assert (
+            result == mock_pinecone_async_client.return_value.IndexAsyncio.return_value
+        )
+
+        # Verify no sync index was created or accessed
+        assert vectorstore._index is None
+
+    @pytest.mark.parametrize("mock_index_obj", ["mock_index", "mock_async_index"])
+    def test_initialization_with_index__caches_host(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_index_obj: MockType,
+    ) -> None:
+        """Tests that initializing the vectorstore with an asynchronous index"""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+        mock_index = request.getfixturevalue(mock_index_obj)
+
+        # Create vectorstore with host parameter (avoids sync index creation)
+        vectorstore = vectorstore_cls(
+            pinecone_api_key="test-key",
+            index=mock_index,
+            embedding=mock_embedding,
+            text_key="text",
+        )
+
+        # Verify host is properly cached
+        assert vectorstore._index_host == mock_index.config.host
+
+    @pytest.mark.parametrize("mock_index_obj", ["mock_index", "mock_async_index"])
+    def test_initialization_with_index_and_host__ignores_host(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_index_obj: MockType,
+    ) -> None:
+        """Tests that initializing the vectorstore with an asynchronous index"""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+        mock_index = request.getfixturevalue(mock_index_obj)
+
+        # Create vectorstore with host parameter (avoids sync index creation)
+        vectorstore = vectorstore_cls(
+            pinecone_api_key="test-key",
+            host="another-unrelated-host.pinecone.io",
+            index=mock_index,
+            embedding=mock_embedding,
+            text_key="text",
+        )
+
+        # Verify host is properly cached
+        assert vectorstore._index_host == mock_index.config.host
+
     @pytest.mark.asyncio
     async def test_aadd_texts__calls_index_upsert(
         self,
@@ -146,28 +333,18 @@ class TestVectorstores:
     async def test_initialising_with_sync_index__still_uses_async_index(
         self,
         request: FixtureRequest,
-        mocker: MockerFixture,
         vectorstore_cls: Type[PineconeVectorStore],
+        mock_async_client: AsyncMockType,
         mock_index: AsyncMockType,
         mock_embedding_obj: str,
-        mock_async_index: AsyncMockType,
     ) -> None:
         """Test that initializing with a sync index still enables async operations."""
-
-        # Mock the async client
-        mock_async_client = mocker.patch(
-            "langchain_pinecone.vectorstores.PineconeAsyncioClient"
-        )
-
         mock_embedding = request.getfixturevalue(mock_embedding_obj)
 
         # Create vectorstore with sync index
         vectorstore = vectorstore_cls(
             index=mock_index, embedding=mock_embedding, text_key="text"
         )
-
-        # Mock the async index creation to return our mock
-        mock_async_client.return_value.IndexAsyncio.return_value = mock_async_index
 
         texts = ["test document"]
         await vectorstore.aadd_texts(texts)
@@ -178,7 +355,7 @@ class TestVectorstores:
         )
 
         # Verify the async upsert was called
-        mock_async_index.upsert.assert_called_once()
+        mock_async_client.return_value.IndexAsyncio.return_value.upsert.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_asimilarity_search_with_score(
@@ -309,3 +486,50 @@ class TestVectorstores:
         # each upsert call will yield a `multiprocessing.pool.ApplyResult` object
         # assert we fetch the future result 3 times
         mock_upsert_return.get.assert_has_calls([call()] * 3)
+
+    @pytest.mark.asyncio
+    async def test__closes_pinecone_client(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_async_client: AsyncMockType,
+        mock_embedding_obj: str,
+        mock_index: MockType,
+    ) -> None:
+        """Test the PineconeAsyncio client is closed properly"""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        # Create vectorstore
+        vectorstore = vectorstore_cls(
+            index=mock_index, embedding=mock_embedding, text_key="text"
+        )
+
+        await vectorstore.aadd_texts(["test"])
+
+        mock_async_client.return_value.__aexit__.assert_called_once()
+        mock_async_client.return_value.IndexAsyncio.return_value.__aexit__.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_index__closes_only_once_even_multiple_calls(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_async_client: AsyncMockType,
+        mock_embedding_obj: str,
+        mock_index: MockType,
+    ) -> None:
+        """Test the PineconeAsyncio client is closed properly"""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        # Create vectorstore
+        vectorstore = vectorstore_cls(
+            index=mock_index, embedding=mock_embedding, text_key="text"
+        )
+
+        await vectorstore.aadd_texts(["test1"] * 2000)  # 2x embedding_chunk_size
+
+        # Even though embeddings are called twice (for each chunk in loop) ...
+        mock_embedding.aembed_documents.assert_has_calls([call(["test1"] * 1000)] * 2)
+
+        # ... we're persisting the connection and only closing on completion
+        mock_async_client.return_value.IndexAsyncio.return_value.__aexit__.assert_called_once()
