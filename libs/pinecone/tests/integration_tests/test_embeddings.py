@@ -1,3 +1,4 @@
+import os
 import time
 from datetime import datetime
 from typing import AsyncGenerator
@@ -23,6 +24,11 @@ INDEX_NAME = f"langchain-test-embeddings-{datetime.now().strftime('%Y%m%d%H%M%S'
 MODEL = "multilingual-e5-large"
 SPARSE_MODEL_NAME = "pinecone-sparse-english-v0"
 NAMESPACE_NAME = "test_namespace"
+
+# Check for required environment variables
+requires_api_key = pytest.mark.skipif(
+    not os.environ.get("PINECONE_API_KEY"), reason="Pinecone API key not set"
+)
 
 
 @pytest.fixture(scope="function")
