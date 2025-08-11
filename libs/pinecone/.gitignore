@@ -1,1 +1,4 @@
 __pycache__
+
+# ignore test.ipynb
+test.ipynb

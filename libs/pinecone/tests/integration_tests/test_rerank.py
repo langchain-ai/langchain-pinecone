@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 import pytest
 from langchain_core.documents import Document
@@ -9,6 +10,18 @@ from langchain_pinecone import PineconeRerank
 pytestmark = pytest.mark.skipif(
     not os.environ.get("PINECONE_API_KEY"), reason="Pinecone API key not set"
 )
+
+
+@pytest.fixture(autouse=True)
+def patch_pinecone_rerank_model_listing(mocker: Any) -> None:
+    mocker.patch(
+        "langchain_pinecone.rerank.PineconeRerank.list_supported_models",
+        return_value=[
+            {"model": "test-model"},
+            {"model": "cohere-rerank-3.5"},
+            {"model": "bge-reranker-v2-m3"},
+        ],
+    )
 
 
 def test_pinecone_rerank_basic() -> None:
