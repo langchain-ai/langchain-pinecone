@@ -352,14 +352,6 @@ class PineconeSparseEmbeddings(PineconeEmbeddings):
                     values[key] = value
         return values
 
-    def list_supported_models(self, vector_type: Optional[str] = None) -> list:
-        """Return a list of supported embedding models from Pinecone."""
-        api_key = self.pinecone_api_key.get_secret_value()
-        # Always use "sparse" for PineconeSparseEmbeddings, ignore vector_type argument
-        return get_pinecone_supported_models(
-            api_key, model_type="embed", vector_type="sparse"
-        )
-
     def embed_documents(self, texts: List[str]) -> List[SparseValues]:
         """Embed search docs with sparse embeddings."""
         embeddings: List[SparseValues] = []
