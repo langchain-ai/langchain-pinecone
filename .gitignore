@@ -1,3 +1,5 @@
+# Ignore test.ipynb in pinecone folder
+libs/pinecone/test.ipynb
 __pycache__
 .mypy_cache
 .pytest_cache
@@ -6,3 +8,4 @@ __pycache__
 .env
 .venv*
 .DS_Store
+./libs/pinecone/*.ipynb
