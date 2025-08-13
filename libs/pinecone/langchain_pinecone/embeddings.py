@@ -80,8 +80,8 @@ class PineconeEmbeddings(BaseModel, Embeddings):
     # Clients
     _client: PineconeClient = PrivateAttr(default=None)
     _async_client: Optional[PineconeAsyncioClient] = PrivateAttr(default=None)
-    model: str
-    """Model to use for example 'multilingual-e5-large'."""
+    # Model to use for example 'multilingual-e5-large'. Defaults to 'multilingual-e5-large' if not provided.
+    model: str = Field(default="multilingual-e5-large")
     # Config
     batch_size: Optional[int] = None
     """Batch size for embedding documents."""
@@ -137,6 +137,8 @@ class PineconeEmbeddings(BaseModel, Embeddings):
             },
         }
         model = values.get("model")
+        if model is None:
+            model = "multilingual-e5-large"
         if model in default_config_map:
             config = default_config_map[model]
             for key, value in config.items():
@@ -349,6 +351,14 @@ class PineconeSparseEmbeddings(PineconeEmbeddings):
                 if key not in values:
                     values[key] = value
         return values
+
+    def list_supported_models(self, vector_type: Optional[str] = None) -> list:
+        """Return a list of supported embedding models from Pinecone."""
+        api_key = self.pinecone_api_key.get_secret_value()
+        # Always use "sparse" for PineconeSparseEmbeddings, ignore vector_type argument
+        return get_pinecone_supported_models(
+            api_key, model_type="embed", vector_type="sparse"
+        )
 
     def embed_documents(self, texts: List[str]) -> List[SparseValues]:
         """Embed search docs with sparse embeddings."""
