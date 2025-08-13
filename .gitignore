@@ -7,13 +7,7 @@ __pycache__
 .mypy_cache_test
 .env
 .venv*
-<<<<<<< HEAD
-<<<<<<< HEAD
-.DS_Store
-=======
-./libs/pinecone/*.ipynb
->>>>>>> main
-=======
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints
 .DS_Store
 ./libs/pinecone/*.ipynb
->>>>>>> 886c28fa962ae49f1cf930c63bf531170cb7d8dd
