@@ -266,6 +266,7 @@ class PineconeSparseVectorStore(PineconeVectorStore):
                 self.index.upsert(
                     vectors=vectors,
                     namespace=namespace,
+                    batch_size=batch_size,
                     **kwargs,
                 )
         return ids
