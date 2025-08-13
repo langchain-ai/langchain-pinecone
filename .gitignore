@@ -8,7 +8,12 @@ __pycache__
 .env
 .venv*
 <<<<<<< HEAD
+<<<<<<< HEAD
 .DS_Store
 =======
 ./libs/pinecone/*.ipynb
 >>>>>>> main
+=======
+.DS_Store
+./libs/pinecone/*.ipynb
+>>>>>>> 886c28fa962ae49f1cf930c63bf531170cb7d8dd
