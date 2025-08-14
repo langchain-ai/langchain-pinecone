@@ -70,6 +70,27 @@ async def sparse_embd_client() -> AsyncGenerator[PineconeSparseEmbeddings, None]
 
 
 @requires_api_key
+def test_change_api_key_and_pinecone_api_key() -> None:
+    """Test changing api_key and pinecone_api_key for PineconeSparseEmbeddings."""
+
+    # Create a PineconeSparseEmbeddings instance with pinecone_api_key
+    emb_1 = PineconeSparseEmbeddings(
+        model=SPARSE_MODEL_NAME,
+        pinecone_api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
+        dimension=DIMENSION,
+    )
+    emb_1._client.close()
+
+    # Create a second instance with api_key
+    emb_2 = PineconeSparseEmbeddings(
+        model=SPARSE_MODEL_NAME,
+        pinecone_api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
+        dimension=DIMENSION,
+    )
+    emb_2._client.close()
+
+
+@requires_api_key
 def test_embed_query(embd_client: PineconeEmbeddings) -> None:
     out = embd_client.embed_query("Hello, world!")
     assert isinstance(out, list)

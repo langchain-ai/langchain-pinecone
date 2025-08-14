@@ -8,7 +8,7 @@ from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.utils import secret_from_env
 from pinecone import Pinecone, PineconeAsyncio
-from pydantic import ConfigDict, Field, SecretStr, model_validator
+from pydantic import AliasChoices, ConfigDict, Field, SecretStr, model_validator
 
 from langchain_pinecone._utilities import (
     aget_pinecone_supported_models,
@@ -38,6 +38,8 @@ class PineconeRerank(BaseDocumentCompressor):
             error_message="Pinecone API key not found. Please set the PINECONE_API_KEY "
             "environment variable or pass it via `pinecone_api_key`.",
         ),
+        alias="pinecone_api_key",
+        validation_alias=AliasChoices("pinecone_api_key", "api_key"),
     )
     """Pinecone API key. 
     

@@ -22,6 +22,7 @@ except ImportError:
     from pinecone.data.features.inference.inference import EmbeddingsList
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -100,6 +101,7 @@ class PineconeEmbeddings(BaseModel, Embeddings):
             "environment variable or pass it via `pinecone_api_key`.",
         ),
         alias="pinecone_api_key",
+        validation_alias=AliasChoices("pinecone_api_key", "api_key"),
     )
     """Pinecone API key. 
     

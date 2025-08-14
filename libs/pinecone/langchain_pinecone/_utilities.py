@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 from typing import List, Literal, Optional, Union
 
@@ -278,8 +279,7 @@ async def aget_pinecone_supported_models(
     _ModelParamsModel.validate(model_type, vector_type)
 
     # Pinecone API base URL
-    base_url = "https://api.pinecone.io"
-    endpoint = "/models"
+    base_url = os.getenv("PINECONE_BASE_URL", "https://api.pinecone.io")
 
     # Build query parameters
     params = {}
@@ -297,7 +297,7 @@ async def aget_pinecone_supported_models(
 
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{base_url}{endpoint}",
+            f"{base_url}/models",
             params=params,
             headers=headers,
         )

@@ -125,6 +125,19 @@ class TestPineconeEmbeddingsConfig:
         assert embeddings.query_params == {"custom": "param"}
         assert embeddings.document_params == {"other": "param"}
 
+    def test_custom_config_pinecone_key(self) -> None:
+        """Test custom configuration overrides defaults."""
+        embeddings = PineconeEmbeddings(
+            model=MODEL_NAME,
+            api_key=API_KEY,
+            batch_size=128,
+            query_params={"custom": "param"},
+            document_params={"other": "param"},
+        )
+        assert embeddings.batch_size == 128
+        assert embeddings.query_params == {"custom": "param"}
+        assert embeddings.document_params == {"other": "param"}
+
     @pytest.mark.asyncio
     async def test_async_client_initialization(self) -> None:
         """Test async client is initialized correctly and only when needed."""

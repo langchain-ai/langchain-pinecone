@@ -138,7 +138,9 @@ class TestPineconeRerank:
         self, mock_pinecone_client: MagicMock
     ) -> None:
         """Test initialization with a provided Pinecone client instance."""
-        reranker = PineconeRerank(client=mock_pinecone_client, model="test-model")
+        reranker = PineconeRerank(
+            client=mock_pinecone_client, model="test-model", pinecone_api_key=API_KEY
+        )
         assert reranker.client == mock_pinecone_client
         assert reranker.model == "test-model"
 
@@ -156,7 +158,7 @@ class TestPineconeRerank:
         invalid_client = MagicMock()
 
         # Use the _get_sync_client method which checks the type
-        reranker = PineconeRerank(model="test-model")
+        reranker = PineconeRerank(model="test-model", pinecone_api_key=API_KEY)
         reranker.client = invalid_client  # Directly set an invalid client
 
         # Now when we try to use _get_sync_client, it should verify the client type
