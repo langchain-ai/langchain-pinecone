@@ -79,16 +79,15 @@ def test_change_api_key_and_pinecone_api_key() -> None:
         pinecone_api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
         dimension=DIMENSION,
     )
-    emb_1._client.close()
-
+    assert emb_1.pinecone_api_key == convert_to_secret_str(os.environ.get("PINECONE_API_KEY", ""))
+    
     # Create a second instance with api_key
     emb_2 = PineconeSparseEmbeddings(
         model=SPARSE_MODEL_NAME,
         pinecone_api_key=convert_to_secret_str(os.environ.get("PINECONE_API_KEY", "")),
         dimension=DIMENSION,
     )
-    emb_2._client.close()
-
+    assert emb_2.pinecone_api_key == convert_to_secret_str(os.environ.get("PINECONE_API_KEY", ""))
 
 @requires_api_key
 def test_embed_query(embd_client: PineconeEmbeddings) -> None:

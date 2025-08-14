@@ -129,11 +129,11 @@ class TestPineconeEmbeddingsConfig:
         """Test custom configuration overrides defaults."""
         embeddings = PineconeEmbeddings(
             model=MODEL_NAME,
-            api_key=API_KEY,
+            api_key=API_KEY,    
             batch_size=128,
             query_params={"custom": "param"},
             document_params={"other": "param"},
-        )
+        ) # type: ignore[call-arg]
         assert embeddings.batch_size == 128
         assert embeddings.query_params == {"custom": "param"}
         assert embeddings.document_params == {"other": "param"}
