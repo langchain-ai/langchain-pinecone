@@ -20,7 +20,6 @@ from langchain_core._api.deprecation import deprecated
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.pydantic_v1 import SecretStr
-from langchain_core.utils import secret_from_env
 from langchain_core.utils.iter import batch_iterate
 from langchain_core.vectorstores import VectorStore
 from pinecone import Pinecone as PineconeClient
@@ -229,16 +228,16 @@ class PineconeVectorStore(VectorStore):
                 self._pinecone_api_key = index.config.api_key
         else:
             # all internal initialization
-            _pinecone_api_key = pinecone_api_key or secret_from_env("PINECONE_API_KEY", default=None)
-            if _pinecone_api_key is None:
+            _pinecone_api_key_str = pinecone_api_key or os.environ.get(
+                "PINECONE_API_KEY"
+            )
+            if _pinecone_api_key_str:
+                self._pinecone_api_key = SecretStr(_pinecone_api_key_str)
+            else:
                 raise ValueError(
                     "Pinecone API key must be provided in either `pinecone_api_key` "
                     "or `PINECONE_API_KEY` environment variable"
                 )
-            elif isinstance(_pinecone_api_key, str):
-                self._pinecone_api_key = SecretStr(_pinecone_api_key)
-            else:
-                self._pinecone_api_key = _pinecone_api_key
 
             # Store the host parameter or get from environment variable
             _index_name = index_name or os.environ.get("PINECONE_INDEX_NAME") or ""
@@ -251,7 +250,8 @@ class PineconeVectorStore(VectorStore):
             # Only create sync index if no host is provided
             if not _index_host:
                 client = PineconeClient(
-                    api_key=self._pinecone_api_key.get_secret_value(), source_tag="langchain"
+                    api_key=self._pinecone_api_key.get_secret_value(),
+                    source_tag="langchain",
                 )
                 _index = client.Index(name=_index_name)
                 self._index = _index
@@ -265,7 +265,8 @@ class PineconeVectorStore(VectorStore):
         """Get synchronous index instance."""
         if self._index is None:
             client = PineconeClient(
-                api_key=self._pinecone_api_key.get_secret_value(), source_tag="langchain"
+                api_key=self._pinecone_api_key.get_secret_value(),
+                source_tag="langchain",
             )
             self._index = client.Index(host=self._index_host)
         return self._index
@@ -275,7 +276,8 @@ class PineconeVectorStore(VectorStore):
         """Get asynchronous index instance."""
         if self._async_index is None:
             async with PineconeAsyncioClient(
-                api_key=self._pinecone_api_key.get_secret_value(), source_tag="langchain"
+                api_key=self._pinecone_api_key.get_secret_value(),
+                source_tag="langchain",
             ) as client:
                 # Priority: constructor parameter → cached host → environment variable
                 host = self._index_host
@@ -842,16 +844,17 @@ class PineconeVectorStore(VectorStore):
             pinecone_api_key: The api_key of Pinecone.
         Returns:
             Pinecone Index instance."""
-        _pinecone_api_key = pinecone_api_key or secret_from_env("PINECONE_API_KEY", default=None)
-        if _pinecone_api_key is None:
+        _pinecone_api_key_str = pinecone_api_key or os.environ.get("PINECONE_API_KEY")
+        if not _pinecone_api_key_str:
             raise ValueError(
                 "Pinecone API key must be provided in either `pinecone_api_key` "
                 "or `PINECONE_API_KEY` environment variable"
             )
-        if isinstance(_pinecone_api_key, str):
-            _pinecone_api_key = SecretStr(_pinecone_api_key)
+        _pinecone_api_key = SecretStr(_pinecone_api_key_str)
         client = PineconeClient(
-            api_key=_pinecone_api_key.get_secret_value(), pool_threads=pool_threads, source_tag="langchain"
+            api_key=_pinecone_api_key.get_secret_value(),
+            pool_threads=pool_threads,
+            source_tag="langchain",
         )
         indexes = client.list_indexes()
         index_names = [i.name for i in indexes.index_list["indexes"]]
