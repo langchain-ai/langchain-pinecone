@@ -10,7 +10,6 @@ dependencies = [
     "langchain-core<1.0.0,>=0.3.34",
     "pinecone[asyncio]>=6.0.0,<8.0.0",
     "numpy>=1.26.4",
-    "langchain-tests<1.0.0,>=0.3.7",
     "langchain-openai>=0.3.11",
     "httpx>=0.28.0",
 ]
@@ -33,6 +32,7 @@ test = [
     "pytest-watcher<1.0.0,>=0.3.4",
     "pytest-asyncio<1,>=0.25.0",
     "pytest-socket<1.0.0,>=0.7.0",
+    "langchain-tests>=0.3.17",
 ]
 codespell = ["codespell<3.0.0,>=2.2.0"]
 test_integration = ["langchain-openai<0.4,>=0.3.6"]

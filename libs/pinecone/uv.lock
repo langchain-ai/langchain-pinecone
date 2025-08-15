@@ -882,7 +882,6 @@ dependencies = [
     { name = "httpx" },
     { name = "langchain-core" },
     { name = "langchain-openai" },
-    { name = "langchain-tests" },
     { name = "numpy" },
     { name = "pinecone", extra = ["asyncio"] },
 ]
@@ -901,6 +900,7 @@ lint = [
 ]
 test = [
     { name = "freezegun" },
+    { name = "langchain-tests" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-mock" },
@@ -921,7 +921,6 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "langchain-core", specifier = ">=0.3.34,<1.0.0" },
     { name = "langchain-openai", specifier = ">=0.3.11" },
-    { name = "langchain-tests", specifier = ">=0.3.7,<1.0.0" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
 ]
@@ -936,6 +935,7 @@ dev = [
 lint = [{ name = "ruff", specifier = ">=0.5,<1.0" }]
 test = [
     { name = "freezegun", specifier = ">=1.2.2,<2.0.0" },
+    { name = "langchain-tests", specifier = ">=0.3.17" },
     { name = "pytest", specifier = ">=8,<9" },
     { name = "pytest-asyncio", specifier = ">=0.25.0,<1" },
     { name = "pytest-mock", specifier = ">=3.10.0,<4.0.0" },
