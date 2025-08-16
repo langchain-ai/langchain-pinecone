@@ -895,6 +895,7 @@ dev = [
     { name = "ipykernel" },
     { name = "langchain-core" },
     { name = "pip" },
+    { name = "simsimd" },
 ]
 lint = [
     { name = "ruff" },
@@ -932,6 +933,7 @@ dev = [
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "langchain-core" },
     { name = "pip", specifier = ">=25.0.1" },
+    { name = "simsimd", specifier = ">=5.9.11" },
 ]
 lint = [{ name = "ruff", specifier = ">=0.5,<1.0" }]
 test = [
