@@ -141,7 +141,7 @@ def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     if pc.has_index(name=INDEX_NAME):  # change to list comprehension
         pc.delete_index(INDEX_NAME)
         time.sleep(DEFAULT_SLEEP)  # prevent race with subsequent creation
-    print(f"Creating index {INDEX_NAME}...")
+    print(f"Creating index {INDEX_NAME}...") # noqa: T201
     pc.create_index(
         name=INDEX_NAME,
         dimension=DIMENSION,
