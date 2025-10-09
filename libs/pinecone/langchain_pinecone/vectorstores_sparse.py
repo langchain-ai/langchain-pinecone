@@ -315,9 +315,8 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         for metadata, text in zip(metadatas, texts):
             metadata[self._text_key] = text
 
-        idx = await self.async_index
         # Manage _IndexAsyncio HTTP client lifespan
-        async with idx:
+        async with self._async_index_context() as idx:
             # For loops to avoid memory issues and optimize when using HTTP based embeddings
             for i in range(0, len(texts), embedding_chunk_size):
                 chunk_texts = texts[i : i + embedding_chunk_size]
@@ -453,9 +452,8 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             namespace = self._namespace
 
         docs = []
-        idx = await self.async_index
         # Manage _IndexAsyncio HTTP client lifespan
-        async with idx:
+        async with self._async_index_context() as idx:
             results = await idx.query(
                 sparse_vector=embedding,
                 top_k=k,
@@ -603,9 +601,8 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        idx = await self.async_index
         # Manage _IndexAsyncio HTTP client lifespan
-        async with idx:
+        async with self._async_index_context() as idx:
             results = await idx.query(
                 sparse_vector=embedding,
                 top_k=fetch_k,
@@ -728,9 +725,8 @@ class PineconeSparseVectorStore(PineconeVectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        idx = await self.async_index
         # Manage _IndexAsyncio HTTP client lifespan
-        async with idx:
+        async with self._async_index_context() as idx:
             if delete_all:
                 await idx.delete(delete_all=True, namespace=namespace, **kwargs)
             elif ids is not None:
