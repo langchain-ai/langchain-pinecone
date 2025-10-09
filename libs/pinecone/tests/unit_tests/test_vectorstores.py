@@ -533,3 +533,92 @@ class TestVectorstores:
 
         # ... we're persisting the connection and only closing on completion
         mock_async_client.return_value.IndexAsyncio.return_value.__aexit__.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_context_manager__reuses_single_async_session(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_async_index: AsyncMockType,
+    ) -> None:
+        """Ensure async context manager keeps a single session across operations."""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        vectorstore = vectorstore_cls(
+            index=mock_async_index, embedding=mock_embedding, text_key="text"
+        )
+
+        async with vectorstore:
+            await vectorstore.aadd_texts(["doc1"])
+            await vectorstore.aadd_texts(["doc2"])
+
+        mock_async_index.__aenter__.assert_called_once()
+        mock_async_index.__aexit__.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_aclose__closes_active_async_context_once(
+        self,
+        request: FixtureRequest,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_async_index: AsyncMockType,
+    ) -> None:
+        """Ensure aclose shuts down an opened async index exactly once."""
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+
+        vectorstore = vectorstore_cls(
+            index=mock_async_index, embedding=mock_embedding, text_key="text"
+        )
+
+        await vectorstore.__aenter__()
+        await vectorstore.aclose()
+        await vectorstore.aclose()
+
+        mock_async_index.__aenter__.assert_called_once()
+        mock_async_index.__aexit__.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_ephemeral_async_calls_refresh_index(
+        self,
+        request: FixtureRequest,
+        mocker: MockerFixture,
+        vectorstore_cls: Type[PineconeVectorStore],
+        mock_embedding_obj: str,
+        mock_pinecone_client: MockType,
+        mock_async_client: AsyncMockType,
+        mock_async_index: AsyncMockType,
+    ) -> None:
+        """Sequential async calls without context manager recreate sessions as needed."""
+        if vectorstore_cls is PineconeSparseVectorStore:
+            pytest.skip("Not applicable for sparse vector store.")
+
+        mock_embedding = request.getfixturevalue(mock_embedding_obj)
+        mock_embedding.aembed_query = mocker.AsyncMock(return_value=[0.1, 0.2, 0.3])
+
+        mock_async_index.query = mocker.AsyncMock(
+            return_value={
+                "matches": [
+                    {
+                        "metadata": {"text": "example text", "source": "unit"},
+                        "score": 0.42,
+                        "id": "example-id",
+                    }
+                ]
+            }
+        )
+        mock_async_index.delete = mocker.AsyncMock(return_value=None)
+
+        vectorstore = vectorstore_cls(
+            embedding=mock_embedding,
+            pinecone_api_key="test-key",
+            index_name="test-index",
+        )
+
+        ids = await vectorstore.aadd_texts(["example text"])
+        assert len(ids) == 1
+        assert mock_async_index.__aenter__.call_count == 1
+        await vectorstore.asimilarity_search("example", k=1)
+        assert mock_async_index.__aenter__.call_count == 2
+        await vectorstore.adelete(ids=ids)
+        assert mock_async_index.__aenter__.call_count == 3

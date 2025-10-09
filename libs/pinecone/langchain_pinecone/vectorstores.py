@@ -4,9 +4,12 @@ import asyncio
 import logging
 import os
 import uuid
+from contextlib import asynccontextmanager
+from types import TracebackType
 from typing import (
     TYPE_CHECKING,
     Any,
+    AsyncIterator,
     Callable,
     Iterable,
     List,
@@ -211,6 +214,9 @@ class PineconeVectorStore(VectorStore):
 
         self._namespace = namespace
         self.distance_strategy = distance_strategy
+        self._async_index_ctx_manager: Optional[_IndexAsyncio] = None
+        self._async_index_context_open = False
+        self._async_index_provided = isinstance(index, _IndexAsyncio)
 
         _index_host = host or os.environ.get("PINECONE_HOST")
         if index and _index_host:
@@ -287,6 +293,7 @@ class PineconeVectorStore(VectorStore):
                         "PINECONE_HOST environment variable, or host parameter"
                     )
                 self._async_index = client.IndexAsyncio(host=host)
+                self._async_index_provided = False
         return self._async_index
 
     @property
@@ -415,10 +422,8 @@ class PineconeVectorStore(VectorStore):
         for metadata, text in zip(metadatas, texts):
             metadata[self._text_key] = text
 
-        idx: _IndexAsyncio = await self.async_index
-
         # Manage _IndexAsyncio HTTP client lifespan
-        async with idx:
+        async with self._async_index_context() as idx:
             # For loops to avoid memory issues and optimize when using HTTP based embeddings
             for i in range(0, len(texts), embedding_chunk_size):
                 chunk_texts = texts[i : i + embedding_chunk_size]
@@ -441,6 +446,49 @@ class PineconeVectorStore(VectorStore):
                 await asyncio.gather(*tasks)
 
         return ids
+
+    async def __aenter__(self) -> PineconeVectorStore:
+        if not self._async_index_context_open:
+            idx = await self.async_index
+            await idx.__aenter__()
+            self._async_index_ctx_manager = idx
+            self._async_index_context_open = True
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> None:
+        await self.aclose(exc_type, exc, tb)
+
+    async def aclose(
+        self,
+        exc_type: Optional[type[BaseException]] = None,
+        exc: Optional[BaseException] = None,
+        tb: Optional[TracebackType] = None,
+    ) -> None:
+        if self._async_index_context_open and self._async_index_ctx_manager:
+            await self._async_index_ctx_manager.__aexit__(exc_type, exc, tb)
+            self._async_index_ctx_manager = None
+            self._async_index_context_open = False
+        if not self._async_index_provided:
+            self._async_index = None
+
+    @asynccontextmanager
+    async def _async_index_context(self) -> AsyncIterator[_IndexAsyncio]:
+        idx = await self.async_index
+        if self._async_index_context_open and self._async_index_ctx_manager:
+            yield idx
+            return
+
+        try:
+            async with idx:
+                yield idx
+        finally:
+            if not self._async_index_context_open and not self._async_index_provided:
+                self._async_index = None
 
     def similarity_search_by_vector(
         self,
@@ -575,9 +623,8 @@ class PineconeVectorStore(VectorStore):
         filter = kwargs.get("filter")
 
         docs = []
-        idx = await self.async_index
         # Manage _IndexAsyncio HTTP client lifespan
-        async with idx:
+        async with self._async_index_context() as idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=k,
@@ -750,9 +797,8 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        idx = await self.async_index
         # Manage _IndexAsyncio HTTP client lifespan
-        async with idx:
+        async with self._async_index_context() as idx:
             results = await idx.query(
                 vector=embedding,
                 top_k=fetch_k,
@@ -1031,9 +1077,8 @@ class PineconeVectorStore(VectorStore):
         if namespace is None:
             namespace = self._namespace
 
-        idx = await self.async_index
         # Manage _IndexAsyncio HTTP client lifespan
-        async with idx:
+        async with self._async_index_context() as idx:
             if delete_all:
                 await idx.delete(delete_all=True, namespace=namespace, **kwargs)
             elif ids is not None:
