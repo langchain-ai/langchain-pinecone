@@ -534,8 +534,11 @@ class PineconeVectorStore(VectorStore):
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to embedding, along with scores."""
-        namespace = kwargs.get("namespace", self._namespace)
+        namespace = kwargs.get("namespace")
         filter = kwargs.get("filter")
+
+        if namespace is None:
+            namespace = self._namespace
 
         docs = []
         results = self.index.query(
@@ -571,8 +574,11 @@ class PineconeVectorStore(VectorStore):
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return pinecone documents most similar to embedding, along with scores asynchronously."""
-        namespace = kwargs.get("namespace", self._namespace)
+        namespace = kwargs.get("namespace")
         filter = kwargs.get("filter")
+
+        if namespace is None:
+            namespace = self._namespace
 
         docs = []
         idx = await self.async_index

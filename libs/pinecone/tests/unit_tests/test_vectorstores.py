@@ -533,3 +533,47 @@ class TestVectorstores:
 
         # ... we're persisting the connection and only closing on completion
         mock_async_client.return_value.IndexAsyncio.return_value.__aexit__.assert_called_once()
+
+
+def test_similarity_search_by_vector_with_score__defaults_to_store_namespace(
+    mock_embedding: AsyncMockType,
+    mock_index: MockType,
+) -> None:
+    """Ensure sync similarity search falls back to the configured namespace when None is passed."""
+    mock_index.query = Mock(return_value={"matches": []})
+    vectorstore = PineconeVectorStore(
+        index=mock_index,
+        embedding=mock_embedding,
+        text_key="text",
+        namespace="default-ns",
+    )
+
+    vectorstore.similarity_search_by_vector_with_score(
+        [0.1, 0.2, 0.3],
+        namespace=None,
+    )
+
+    assert mock_index.query.call_args.kwargs["namespace"] == "default-ns"
+
+
+@pytest.mark.asyncio
+async def test_asimilarity_search_by_vector_with_score__defaults_to_store_namespace(
+    mocker: MockerFixture,
+    mock_embedding: AsyncMockType,
+    mock_async_index: AsyncMockType,
+) -> None:
+    """Ensure async similarity search falls back to the configured namespace when None is passed."""
+    mock_async_index.query = mocker.AsyncMock(return_value={"matches": []})
+    vectorstore = PineconeVectorStore(
+        index=mock_async_index,
+        embedding=mock_embedding,
+        text_key="text",
+        namespace="default-ns",
+    )
+
+    await vectorstore.asimilarity_search_by_vector_with_score(
+        [0.1, 0.2, 0.3],
+        namespace=None,
+    )
+
+    assert mock_async_index.query.call_args.kwargs["namespace"] == "default-ns"
