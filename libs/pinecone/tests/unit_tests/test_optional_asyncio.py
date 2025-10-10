@@ -1,9 +1,10 @@
 import pytest
+from langchain_core.utils import convert_to_secret_str
 from pytest_mock import MockerFixture
 
-from langchain_pinecone.vectorstores import PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeEmbeddings
 from langchain_pinecone.rerank import PineconeRerank
+from langchain_pinecone.vectorstores import PineconeVectorStore
 
 
 def test_vectorstore_sync_works_without_asyncio_extra(mocker: MockerFixture) -> None:
@@ -20,7 +21,9 @@ def test_vectorstore_sync_works_without_asyncio_extra(mocker: MockerFixture) -> 
     mock_embedding = mocker.Mock()
     mock_embedding.embed_documents = mocker.Mock(return_value=[[0.1, 0.2, 0.3]])
 
-    vs = PineconeVectorStore(index=mock_index, embedding=mock_embedding, text_key="text")
+    vs = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
 
     # Sync path should work without asyncio client
     vs.add_texts(["hello"], async_req=False)
@@ -28,7 +31,9 @@ def test_vectorstore_sync_works_without_asyncio_extra(mocker: MockerFixture) -> 
 
 
 @pytest.mark.asyncio
-async def test_vectorstore_async_raises_without_asyncio_extra(mocker: MockerFixture) -> None:
+async def test_vectorstore_async_raises_without_asyncio_extra(
+    mocker: MockerFixture,
+) -> None:
     mocker.patch("langchain_pinecone.vectorstores.PineconeAsyncioClient", None)
 
     mock_async_index = mocker.Mock()
@@ -37,7 +42,9 @@ async def test_vectorstore_async_raises_without_asyncio_extra(mocker: MockerFixt
     mock_embedding = mocker.Mock()
     mock_embedding.aembed_documents = mocker.AsyncMock(return_value=[[0.1, 0.2, 0.3]])
 
-    vs = PineconeVectorStore(index=mock_async_index, embedding=mock_embedding, text_key="text")
+    vs = PineconeVectorStore(
+        index=mock_async_index, embedding=mock_embedding, text_key="text"
+    )
 
     with pytest.raises(ImportError):
         await vs.async_index
@@ -50,7 +57,9 @@ def test_embeddings_sync_works_without_asyncio_extra(mocker: MockerFixture) -> N
         return_value=[{"model": "multilingual-e5-large"}],
     )
 
-    emb = PineconeEmbeddings(model="multilingual-e5-large", pinecone_api_key="test")
+    emb = PineconeEmbeddings(
+        model="multilingual-e5-large", pinecone_api_key=convert_to_secret_str("test")
+    )
     # Sync methods should work
     mock_client = mocker.patch.object(emb, "_client")
     mock_client.inference.embed.return_value = [{"values": [0.1, 0.2]}]
@@ -58,14 +67,18 @@ def test_embeddings_sync_works_without_asyncio_extra(mocker: MockerFixture) -> N
 
 
 @pytest.mark.asyncio
-async def test_embeddings_async_raises_without_asyncio_extra(mocker: MockerFixture) -> None:
+async def test_embeddings_async_raises_without_asyncio_extra(
+    mocker: MockerFixture,
+) -> None:
     mocker.patch("langchain_pinecone.embeddings.PineconeAsyncioClient", None)
     mocker.patch(
         "langchain_pinecone.embeddings.PineconeEmbeddings.list_supported_models",
         return_value=[{"model": "multilingual-e5-large"}],
     )
 
-    emb = PineconeEmbeddings(model="multilingual-e5-large", pinecone_api_key="test")
+    emb = PineconeEmbeddings(
+        model="multilingual-e5-large", pinecone_api_key=convert_to_secret_str("test")
+    )
     with pytest.raises(ImportError):
         await emb.aembed_query("hi")
 
@@ -78,7 +91,7 @@ async def test_rerank_async_raises_without_asyncio_extra(mocker: MockerFixture) 
         return_value=[{"model": "bge-reranker-v2-m3"}],
     )
 
-    rr = PineconeRerank(pinecone_api_key="test")
+    rr = PineconeRerank(pinecone_api_key=convert_to_secret_str("test"))
     with pytest.raises(ImportError):
         await rr._get_async_client()
 

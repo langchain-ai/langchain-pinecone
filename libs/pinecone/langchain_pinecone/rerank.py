@@ -8,6 +8,7 @@ from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.utils import secret_from_env
 from pinecone import Pinecone
+
 try:  # pragma: no cover - async client presence covered by tests
     from pinecone import PineconeAsyncio
 except Exception:

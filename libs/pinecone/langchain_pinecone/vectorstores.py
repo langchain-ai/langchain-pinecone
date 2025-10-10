@@ -23,6 +23,7 @@ from langchain_core.pydantic_v1 import SecretStr
 from langchain_core.utils.iter import batch_iterate
 from langchain_core.vectorstores import VectorStore
 from pinecone import Pinecone as PineconeClient
+
 # Optional import: allow sync-only usage without asyncio extra
 try:  # pragma: no cover - exercised via unit tests mocking client
     from pinecone import PineconeAsyncio as PineconeAsyncioClient

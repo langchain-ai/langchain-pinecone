@@ -1,13 +1,17 @@
 import logging
 from typing import Any, Dict, Iterable, List, Optional
 
+# Do not require asyncio extra for sync-only usage; import lazily where needed
+from typing import Any as _AnyForAsyncType
+
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import secret_from_env
 from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
-# Do not require asyncio extra for sync-only usage; import lazily where needed
-from typing import Any as _AnyForAsyncType
+
 try:  # pragma: no cover - validated via tests that patch async client
-    from pinecone import PineconeAsyncio as PineconeAsyncioClient  # type: ignore[import-untyped]
+    from pinecone import (
+        PineconeAsyncio as PineconeAsyncioClient,  # type: ignore[import-untyped]
+    )
 except Exception:  # ImportError or missing extra
     PineconeAsyncioClient = None  # type: ignore[assignment]
 from pinecone import SparseValues
