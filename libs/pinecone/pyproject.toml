@@ -8,7 +8,7 @@ license = { text = "MIT" }
 requires-python = "<3.14,>=3.9"
 dependencies = [
     "langchain-core<1.0.0,>=0.3.34",
-    "pinecone[asyncio]>=6.0.0,<8.0.0",
+    "pinecone>=6.0.0,<8.0.0",
     "numpy>=1.26.4",
     "langchain-openai>=0.3.11",
     "httpx>=0.28.0",
@@ -26,6 +26,7 @@ repository = "https://github.com/langchain-ai/langchain-pinecone"
 
 [dependency-groups]
 test = [
+    "pinecone[asyncio]>=6.0.0,<8.0.0",
     "pytest<9,>=8",
     "freezegun<2.0.0,>=1.2.2",
     "pytest-mock<4.0.0,>=3.10.0",
@@ -36,7 +37,10 @@ test = [
     "langchain-tests>=0.3.17",
 ]
 codespell = ["codespell<3.0.0,>=2.2.0"]
-test_integration = ["langchain-openai<0.4,>=0.3.6"]
+test_integration = [
+    "langchain-openai<0.4,>=0.3.6",
+    "pinecone[asyncio]>=6.0.0,<8.0.0",
+]
 lint = ["ruff<1.0,>=0.5"]
 dev = [
     "ipykernel>=6.29.5",
@@ -44,6 +48,9 @@ dev = [
     "pip>=25.0.1",
 ]
 typing = ["mypy<2.0,>=1.10", "simsimd<6.0.0,>=5.0.0"]
+
+[project.optional-dependencies]
+asyncio = ["pinecone[asyncio]>=6.0.0,<8.0.0"]
 
 [tool.mypy]
 disallow_untyped_defs = true

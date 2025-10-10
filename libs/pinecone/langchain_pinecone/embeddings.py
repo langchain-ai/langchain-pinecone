@@ -4,9 +4,12 @@ from typing import Any, Dict, Iterable, List, Optional
 from langchain_core.embeddings import Embeddings
 from langchain_core.utils import secret_from_env
 from pinecone import Pinecone as PineconeClient  # type: ignore[import-untyped]
-from pinecone import (
-    PineconeAsyncio as PineconeAsyncioClient,  # type: ignore[import-untyped]
-)
+# Do not require asyncio extra for sync-only usage; import lazily where needed
+from typing import Any as _AnyForAsyncType
+try:  # pragma: no cover - validated via tests that patch async client
+    from pinecone import PineconeAsyncio as PineconeAsyncioClient  # type: ignore[import-untyped]
+except Exception:  # ImportError or missing extra
+    PineconeAsyncioClient = None  # type: ignore[assignment]
 from pinecone import SparseValues
 
 from langchain_pinecone._utilities import (
@@ -80,7 +83,7 @@ class PineconeEmbeddings(BaseModel, Embeddings):
 
     # Clients
     _client: PineconeClient = PrivateAttr(default=None)
-    _async_client: Optional[PineconeAsyncioClient] = PrivateAttr(default=None)
+    _async_client: Optional[_AnyForAsyncType] = PrivateAttr(default=None)
     # Model to use for example 'multilingual-e5-large'. Defaults to 'multilingual-e5-large' if not provided.
     model: str = Field(default="multilingual-e5-large")
     # Config
@@ -114,9 +117,16 @@ class PineconeEmbeddings(BaseModel, Embeddings):
     )
 
     @property
-    def async_client(self) -> PineconeAsyncioClient:
-        """Lazily initialize the async client."""
-        return PineconeAsyncioClient(
+    def async_client(self) -> _AnyForAsyncType:
+        """Lazily initialize the async client.
+
+        Raises ImportError if the asyncio extra is not installed.
+        """
+        if PineconeAsyncioClient is None:
+            raise ImportError(
+                "Async Pinecone client not available. Install 'pinecone[asyncio]' to use async embedding methods."
+            )
+        return PineconeAsyncioClient(  # type: ignore[operator]
             api_key=self.pinecone_api_key.get_secret_value(), source_tag="langchain"
         )
 

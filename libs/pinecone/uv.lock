@@ -883,8 +883,13 @@ dependencies = [
     { name = "langchain-core" },
     { name = "langchain-openai" },
     { name = "numpy" },
-    { name = "pinecone", extra = ["asyncio"] },
+    { name = "pinecone" },
     { name = "simsimd" },
+]
+
+[package.optional-dependencies]
+asyncio = [
+    { name = "pinecone", extra = ["asyncio"] },
 ]
 
 [package.dev-dependencies]
@@ -902,6 +907,7 @@ lint = [
 test = [
     { name = "freezegun" },
     { name = "langchain-tests" },
+    { name = "pinecone", extra = ["asyncio"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-mock" },
@@ -911,6 +917,7 @@ test = [
 ]
 test-integration = [
     { name = "langchain-openai" },
+    { name = "pinecone", extra = ["asyncio"] },
 ]
 typing = [
     { name = "mypy" },
@@ -923,9 +930,11 @@ requires-dist = [
     { name = "langchain-core", specifier = ">=0.3.34,<1.0.0" },
     { name = "langchain-openai", specifier = ">=0.3.11" },
     { name = "numpy", specifier = ">=1.26.4" },
-    { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
+    { name = "pinecone", specifier = ">=6.0.0,<8.0.0" },
+    { name = "pinecone", extras = ["asyncio"], marker = "extra == 'asyncio'", specifier = ">=6.0.0,<8.0.0" },
     { name = "simsimd", specifier = ">=5.9.11" },
 ]
+provides-extras = ["asyncio"]
 
 [package.metadata.requires-dev]
 codespell = [{ name = "codespell", specifier = ">=2.2.0,<3.0.0" }]
@@ -938,6 +947,7 @@ lint = [{ name = "ruff", specifier = ">=0.5,<1.0" }]
 test = [
     { name = "freezegun", specifier = ">=1.2.2,<2.0.0" },
     { name = "langchain-tests", specifier = ">=0.3.17" },
+    { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
     { name = "pytest", specifier = ">=8,<9" },
     { name = "pytest-asyncio", specifier = ">=0.25.0,<1" },
     { name = "pytest-mock", specifier = ">=3.10.0,<4.0.0" },
@@ -945,7 +955,10 @@ test = [
     { name = "pytest-watcher", specifier = ">=0.3.4,<1.0.0" },
     { name = "syrupy", specifier = ">=4.0.2,<5.0.0" },
 ]
-test-integration = [{ name = "langchain-openai", specifier = ">=0.3.6,<0.4" }]
+test-integration = [
+    { name = "langchain-openai", specifier = ">=0.3.6,<0.4" },
+    { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
+]
 typing = [
     { name = "mypy", specifier = ">=1.10,<2.0" },
     { name = "simsimd", specifier = ">=5.0.0,<6.0.0" },

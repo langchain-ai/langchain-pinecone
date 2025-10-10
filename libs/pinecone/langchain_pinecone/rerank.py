@@ -7,7 +7,11 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 from langchain_core.callbacks.base import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.utils import secret_from_env
-from pinecone import Pinecone, PineconeAsyncio
+from pinecone import Pinecone
+try:  # pragma: no cover - async client presence covered by tests
+    from pinecone import PineconeAsyncio
+except Exception:
+    PineconeAsyncio = None  # type: ignore[assignment]
 from pydantic import AliasChoices, ConfigDict, Field, SecretStr, model_validator
 
 from langchain_pinecone._utilities import (
@@ -98,8 +102,12 @@ class PineconeRerank(BaseDocumentCompressor):
             )
         return self.client
 
-    async def _get_async_client(self) -> PineconeAsyncio:
+    async def _get_async_client(self) -> PineconeAsyncio:  # type: ignore[name-defined]
         """Get or create the async client."""
+        if PineconeAsyncio is None:
+            raise ImportError(
+                "Async Pinecone client not available. Install 'pinecone[asyncio]' to use async rerank methods."
+            )
         if self.async_client is None:
             self.async_client = PineconeAsyncio(api_key=self._get_api_key())
         elif not isinstance(self.async_client, PineconeAsyncio):
