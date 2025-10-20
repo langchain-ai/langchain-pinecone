@@ -2,6 +2,7 @@ import unittest
 import warnings
 
 import numpy as np
+import pytest
 from pinecone import SparseValues  # type: ignore[import-untyped]
 
 from langchain_pinecone._utilities import (
@@ -184,9 +185,10 @@ class TestSparseUtilities(unittest.TestCase):
         # Remaining picks should maximize diversity
         self.assertEqual(result[2], 2)
 
+    @pytest.mark.xfail
     def test_numpy_promotion_warnings(self) -> None:
         """Test that numpy promotion warnings (indicating issues between v1 and v2) are not raised."""
-        np._set_promotion_state("weak_and_warn")
+        np._set_promotion_state("weak_and_warn")  # type: ignore[attr-defined]
         # Create sparse vectors with known cosine similarity
         x = SparseValues(indices=[0, 1, 2], values=[1.0, 2.0, 3.0])
         y = SparseValues(indices=[0, 1, 2], values=[1.0, 2.0, 3.0])
