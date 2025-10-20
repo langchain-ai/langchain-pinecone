@@ -23,8 +23,7 @@ DIMENSION = 1536  # dimension of the embeddings
 DEFAULT_SLEEP = 20
 
 
-@pytest.skip(
-    allow_module_level=True,
+pytest.skip(
     reason=(
         "Tests have not been running. VectorStoreIntegrationTests expects a fixture "
         "implementing setup and teardown of the vector store, which is not present. "
@@ -32,7 +31,10 @@ DEFAULT_SLEEP = 20
         "the fixture and resolve with existing setup/teardown logic and tests. "
         "https://python.langchain.com/api_reference/standard_tests/integration_tests/langchain_tests.integration_tests.vectorstores.VectorStoreIntegrationTests.html"  # noqa: E501
     ),
+    allow_module_level=True,
 )
+
+
 class TestPinecone(VectorStoreIntegrationTests):
     index: "pinecone.Index"
     pc: "pinecone.Pinecone"
