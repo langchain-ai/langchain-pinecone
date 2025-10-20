@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from datetime import datetime
-from typing import AsyncGenerator, List
+from typing import Any, AsyncGenerator, List
 
 import numpy as np
 import pinecone  # type: ignore
@@ -22,6 +22,17 @@ NAMESPACE_NAME = "langchain-test-namespace"  # name of the namespace
 DIMENSION = 1536  # dimension of the embeddings
 
 DEFAULT_SLEEP = 20
+
+
+@pytest.fixture(autouse=True)
+def patch_pinecone_model_listing(mocker: Any) -> None:
+    mocker.patch(
+        "langchain_pinecone.embeddings.PineconeEmbeddings.list_supported_models",
+        return_value=[
+            {"model": "multilingual-e5-large"},
+            {"model": "pinecone-sparse-english-v0"},
+        ],
+    )
 
 
 class TestPinecone:
