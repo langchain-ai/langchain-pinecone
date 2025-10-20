@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from datetime import datetime
-from typing import List
+from typing import AsyncGenerator, List
 
 import numpy as np
 import pinecone  # type: ignore
@@ -63,14 +63,16 @@ class TestPinecone:
                 pass
 
     @pytest.fixture
-    def embeddings(self) -> Embeddings:
-        return PineconeEmbeddings(
+    async def embeddings(self) -> AsyncGenerator[PineconeEmbeddings, None]:
+        client = PineconeEmbeddings(
             model="multilingual-e5-large",
             pinecone_api_key=convert_to_secret_str(
                 os.environ.get("PINECONE_API_KEY", "")
             ),
             dimension=DIMENSION,
         )
+        yield client
+        await client.async_client.close()
 
     @pytest.fixture
     def texts(self) -> List[str]:
