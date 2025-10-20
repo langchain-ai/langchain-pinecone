@@ -9,6 +9,7 @@ import pinecone  # type: ignore
 import pytest  # type: ignore[import-not-found]
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings  # type: ignore[import-not-found]
+from langchain_tests.integration_tests.vectorstores import VectorStoreIntegrationTests
 from pinecone import AwsRegion, CloudProvider, Metric, ServerlessSpec
 from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
@@ -22,7 +23,7 @@ DIMENSION = 1536  # dimension of the embeddings
 DEFAULT_SLEEP = 20
 
 
-class TestPinecone:
+class TestPinecone(VectorStoreIntegrationTests):
     index: "pinecone.Index"
     pc: "pinecone.Pinecone"
 
