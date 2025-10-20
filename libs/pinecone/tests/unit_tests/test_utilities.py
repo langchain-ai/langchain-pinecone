@@ -186,7 +186,7 @@ class TestSparseUtilities(unittest.TestCase):
 
     def test_numpy_promotion_warnings(self) -> None:
         """Test that numpy promotion warnings (indicating issues between v1 and v2) are not raised."""
-        # np._set_promotion_state("weak_and_warn")
+        np._set_promotion_state("weak_and_warn")
         # Create sparse vectors with known cosine similarity
         x = SparseValues(indices=[0, 1, 2], values=[1.0, 2.0, 3.0])
         y = SparseValues(indices=[0, 1, 2], values=[1.0, 2.0, 3.0])
