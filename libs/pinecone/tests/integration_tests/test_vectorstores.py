@@ -9,7 +9,6 @@ import pinecone  # type: ignore
 import pytest  # type: ignore[import-not-found]
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings  # type: ignore[import-not-found]
-from langchain_tests.integration_tests.vectorstores import VectorStoreIntegrationTests
 from pinecone import AwsRegion, CloudProvider, Metric, ServerlessSpec
 from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
@@ -23,19 +22,7 @@ DIMENSION = 1536  # dimension of the embeddings
 DEFAULT_SLEEP = 20
 
 
-pytest.skip(
-    reason=(
-        "Tests have not been running. VectorStoreIntegrationTests expects a fixture "
-        "implementing setup and teardown of the vector store, which is not present. "
-        "Options include (1) break inheritance with standard tests, or (2) implement "
-        "the fixture and resolve with existing setup/teardown logic and tests. "
-        "https://python.langchain.com/api_reference/standard_tests/integration_tests/langchain_tests.integration_tests.vectorstores.VectorStoreIntegrationTests.html"  # noqa: E501
-    ),
-    allow_module_level=True,
-)
-
-
-class TestPinecone(VectorStoreIntegrationTests):
+class TestPinecone:
     index: "pinecone.Index"
     pc: "pinecone.Pinecone"
 
