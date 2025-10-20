@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.9, <3.14"
 resolution-markers = [
     "python_full_version == '3.11.*'",
@@ -921,7 +921,7 @@ typing = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
-    { name = "langchain-core", specifier = ">=0.3.34,<1.0.0" },
+    { name = "langchain-core", specifier = ">=0.3.34,<2.0.0" },
     { name = "langchain-openai", specifier = ">=0.3.11" },
     { name = "numpy", specifier = ">=1.26.4" },
     { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
