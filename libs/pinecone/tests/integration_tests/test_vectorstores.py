@@ -60,7 +60,7 @@ class TestPinecone(VectorStoreIntegrationTests):
 
     @classmethod
     def teardown_class(self) -> None:
-        self.pc.delete_index()
+        self.pc.delete_index(INDEX_NAME)
 
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
