@@ -461,4 +461,5 @@ class TestPinecone:
             embedding=embedding_openai,
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
+            async_req=False,  # force single-threaded path
         )
