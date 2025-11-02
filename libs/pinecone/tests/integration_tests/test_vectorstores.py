@@ -19,7 +19,7 @@ INDEX_NAME = f"langchain-test-vectorstores-{datetime.now().strftime('%Y%m%d%H%M%
 NAMESPACE_NAME = "langchain-test-namespace"  # name of the namespace
 DIMENSION = 1536  # dimension of the embeddings
 
-DEFAULT_SLEEP = 20
+DEFAULT_SLEEP = 15
 
 
 class TestPinecone:
@@ -51,14 +51,22 @@ class TestPinecone:
 
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-        # delete all the vectors in the index
+        # delete all the vectors in the index for all possible namespaces
         index_stats = self.index.describe_index_stats()
         if index_stats["total_vector_count"] > 0:
-            try:
-                self.index.delete(delete_all=True, namespace=NAMESPACE_NAME)
-            except Exception:
-                # if namespace not found
-                pass
+            # Clean up the main namespace and any test-specific namespaces
+            namespaces_to_clean = [
+                NAMESPACE_NAME,
+                f"{INDEX_NAME}-1",
+                f"{INDEX_NAME}-2",
+            ]
+            for ns in namespaces_to_clean:
+                try:
+                    self.index.delete(delete_all=True, namespace=ns)
+                except Exception:
+                    # if namespace not found, continue
+                    pass
+            time.sleep(DEFAULT_SLEEP)  # wait for deletion to propagate
 
     @pytest.fixture
     def embedding_openai(self) -> OpenAIEmbeddings:
@@ -95,17 +103,20 @@ class TestPinecone:
         unique_id = uuid.uuid4().hex
         needs = f"foobuu {unique_id} booo"
         texts.insert(0, needs)
-
+        print(f"texts: {texts}")  # noqa: T201
         docsearch = await PineconeVectorStore.afrom_texts(
             texts=texts,
             embedding=embedding_openai,
             index_name=INDEX_NAME,
-            namespace=NAMESPACE_NAME,
+            namespace=f"{NAMESPACE_NAME}-afrom-texts",
         )
         await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
         output = await docsearch.asimilarity_search(
-            unique_id, k=1, namespace=NAMESPACE_NAME
+            needs,
+            k=1,
+            namespace=f"{NAMESPACE_NAME}-afrom-texts",
         )
+        print(f"output: {output}")  # noqa: T201
         output[0].id = None  # overwrite ID for ease of comparison
         assert output == [Document(page_content=needs)]
 
@@ -182,7 +193,7 @@ class TestPinecone:
         metadatas = [{"page": i} for i in range(len(texts_2))]
 
         docs = [
-            Document(page_content=text, metadata={"page": metadata})
+            Document(page_content=text, metadata=metadata)
             for text, metadata in zip(texts_2, metadatas)
         ]
 
@@ -190,15 +201,36 @@ class TestPinecone:
         await docsearch.aadd_documents(documents=docs, namespace=f"{INDEX_NAME}-2")
         await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
         output = await docsearch.asimilarity_search(
-            "foo2", k=3, namespace=f"{INDEX_NAME}-2"
+            docs[0].page_content, k=1, namespace=f"{INDEX_NAME}-2"
         )
-        assert output == [docs[0]]
+        # we expect this to return the document object with text "foo2"
+        # however, it will include a modified Document object with a new ID
+        # so we assert on each attribute
+        assert len(output) == 1, f"Expected 1 Document result, got {output}"
+        assert output[0].page_content == docs[0].page_content, (
+            f"Expected page_content={docs[0].page_content}, got {output[0]}"
+        )
+        # check metadata fields
+        assert output[0].metadata, (
+            f"Expected populated metadata dictionary, got {output[0]}"
+        )
+        assert output[0].metadata.get("page") is not None, (
+            f"Expected metadata to have page key, got {output[0]}"
+        )
+        # note that pinecone returns ints as floats, so we need to cast to int in comparison
+        out_page = output[0].metadata.get("page")
+        assert isinstance(out_page, float)
+        assert int(out_page) == docs[0].metadata.get("page"), (
+            f"Expected metadata={docs[0].metadata}, got {output[0]}"
+        )
+        assert isinstance(output[0].id, str), (
+            f"Expected id to be a string, got {output[0]}"
+        )
 
     def test_from_texts_with_scores(self, embedding_openai: OpenAIEmbeddings) -> None:
         """Test end to end construction and search with scores and IDs."""
         texts = ["foo", "bar", "baz"]
         metadatas = [{"page": i} for i in range(len(texts))]
-        print("metadatas", metadatas)  # noqa: T201
         docsearch = PineconeVectorStore.from_texts(
             texts,
             embedding_openai,
@@ -206,25 +238,24 @@ class TestPinecone:
             metadatas=metadatas,
             namespace=NAMESPACE_NAME,
         )
-        print(texts)  # noqa: T201
         time.sleep(DEFAULT_SLEEP)  # prevent race condition
         output = docsearch.similarity_search_with_score(
             "foo", k=3, namespace=NAMESPACE_NAME
         )
-        docs = [o[0] for o in output]
-        scores = [o[1] for o in output]
-        sorted_documents = sorted(docs, key=lambda x: x.metadata["page"])
-        print(sorted_documents)  # noqa: T201
-
-        for document in sorted_documents:
-            document.id = None  # overwrite IDs for ease of comparison
+        print(f"output: {output}")  # noqa: T201
+        sorted_docs_and_scores = sorted(output, key=lambda x: x[0].metadata["page"])
+        for document in sorted_docs_and_scores:
+            document[0].id = None  # overwrite IDs for ease of comparison
         # TODO: why metadata={"page": 0.0}) instead of {"page": 0}, etc???
-        assert sorted_documents == [
+        docs_only = [doc for doc, _ in sorted_docs_and_scores]
+        assert docs_only == [
             Document(page_content="foo", metadata={"page": 0.0}),
             Document(page_content="bar", metadata={"page": 1.0}),
             Document(page_content="baz", metadata={"page": 2.0}),
         ]
-        assert scores[0] > scores[1] > scores[2]
+        # "foo" should have the highest score
+        assert sorted_docs_and_scores[0][1] > sorted_docs_and_scores[1][1]
+        assert sorted_docs_and_scores[0][1] > sorted_docs_and_scores[2][1]
 
     @pytest.mark.asyncio
     async def test_afrom_texts_with_scores(
@@ -246,20 +277,22 @@ class TestPinecone:
         output = await docsearch.asimilarity_search_with_score(
             "foo", k=3, namespace=NAMESPACE_NAME
         )
-        docs = [o[0] for o in output]
-        scores = [o[1] for o in output]
-        sorted_documents = sorted(docs, key=lambda x: x.metadata["page"])
-        print(sorted_documents)  # noqa: T201
-
-        for document in sorted_documents:
-            document.id = None  # overwrite IDs for ease of comparison
+        print(f"output: {output}")  # noqa: T201
+        sorted_docs_and_scores = sorted(output, key=lambda x: x[0].metadata["page"])
+        for document in sorted_docs_and_scores:
+            document[0].id = None  # overwrite IDs for ease of comparison
         # TODO: why metadata={"page": 0.0}) instead of {"page": 0}, etc???
-        assert sorted_documents == [
+        docs_only = [doc for doc, _ in sorted_docs_and_scores]
+        assert docs_only == [
             Document(page_content="foo", metadata={"page": 0.0}),
             Document(page_content="bar", metadata={"page": 1.0}),
             Document(page_content="baz", metadata={"page": 2.0}),
         ]
-        assert scores[0] > scores[1] > scores[2]
+        # "foo" should have the highest score
+        assert sorted_docs_and_scores[0][1] > sorted_docs_and_scores[1][1]
+        assert sorted_docs_and_scores[0][1] > sorted_docs_and_scores[2][1]
+        # clear the namespace
+        self.index.delete(delete_all=True, namespace=NAMESPACE_NAME)
 
     def test_from_existing_index_with_namespaces(
         self, embedding_openai: OpenAIEmbeddings
