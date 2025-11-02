@@ -623,6 +623,7 @@ class TestVectorstores:
         await vectorstore.adelete(ids=ids)
         assert mock_async_index.__aenter__.call_count == 3
 
+
 def test_similarity_search_by_vector_with_score__defaults_to_store_namespace(
     mock_embedding: AsyncMockType,
     mock_index: MockType,
@@ -665,4 +666,3 @@ async def test_asimilarity_search_by_vector_with_score__defaults_to_store_namesp
     )
 
     assert mock_async_index.query.call_args.kwargs["namespace"] == "default-ns"
-
