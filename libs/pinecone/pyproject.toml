@@ -9,7 +9,7 @@ requires-python = "<3.14,>=3.9"
 dependencies = [
     "langchain-core<2.0.0,>=0.3.34",
     "pinecone[asyncio]>=6.0.0,<8.0.0",
-    "numpy>=1.26.4",
+    "numpy>=1.26.4,!=2.0.2",
     "langchain-openai>=0.3.11",
     "httpx>=0.28.0",
     "simsimd>=5.9.11",
