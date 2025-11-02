@@ -1044,7 +1044,7 @@ wheels = [
 
 [[package]]
 name = "langchain-pinecone"
-version = "0.2.12"
+version = "0.2.13rc1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
