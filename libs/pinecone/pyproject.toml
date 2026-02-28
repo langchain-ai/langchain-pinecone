@@ -7,10 +7,11 @@ authors = []
 license = { text = "MIT" }
 requires-python = "<3.14,>=3.10"
 dependencies = [
-    "langchain-core<2.0.0,>=0.3.34",
+    "langchain-core<2.0.0,>=1.2.11",
+    "langsmith>=0.6.3",
     "pinecone[asyncio]>=6.0.0,<8.0.0",
     "numpy>=1.26.4,!=2.0.2",
-    "langchain-openai>=0.3.11",
+    "langchain-openai>=0.3.34",
     "httpx>=0.28.0",
     "simsimd>=5.9.11",
     "pydantic>=2.11.1",
@@ -37,7 +38,7 @@ test = [
     "langchain-tests>=0.3.17",
 ]
 codespell = ["codespell<3.0.0,>=2.2.0"]
-test_integration = ["langchain-openai<0.4,>=0.3.6"]
+test_integration = ["langchain-openai>=0.3.34"]
 lint = ["ruff<1.0,>=0.5"]
 dev = [
     "ipykernel>=6.29.5",
