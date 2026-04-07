@@ -191,10 +191,10 @@ class PineconeVectorStore(VectorStore):
 
     def __init__(
         self,
-        # setting default params to bypass having to pass in
-        # the index and embedding objects - manually throw
-        # exceptions if they are not passed in or set in environment
-        # (keeping param for backwards compatibility)
+        # Set default params to allow flexible initialization:
+        # - index: can be passed directly OR resolved from env variable
+        # - embedding: MUST be provided (required, will raise ValueError if None)
+        # - Kept optional signatures for backwards compatibility
         index: Optional[Any] = None,
         embedding: Optional[Embeddings] = None,
         text_key: Optional[str] = "text",
