@@ -241,7 +241,7 @@ class PineconeEmbeddings(BaseModel, Embeddings):
         """Asynchronously embed query text."""
         embeddings = await self._aembed_texts(
             model=self.model,
-            parameters=self.document_params,
+            parameters=self.query_params,
             texts=[text],
         )
         return embeddings[0]["values"]

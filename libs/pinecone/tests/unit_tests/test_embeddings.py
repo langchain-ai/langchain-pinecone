@@ -325,3 +325,40 @@ class TestPineconeSparseEmbeddingsResponseParsing:
         assert isinstance(result, SparseValues)
         assert result.indices == [1, 5]
         assert result.values == [0.1, 0.2]
+
+
+class TestQueryParamsParity:
+    """Regression tests: query ops must use query_params, not document_params."""
+
+    def test_embed_query_uses_query_params(self, mocker: Any) -> None:
+        embeddings = PineconeEmbeddings(model=MODEL_NAME, pinecone_api_key=API_KEY)
+        mock_embed = mocker.Mock(return_value=[{"values": [0.1, 0.2, 0.3]}])
+        mocker.patch.object(embeddings, "_embed_texts", mock_embed)
+
+        embeddings.embed_query("test query")
+
+        assert mock_embed.call_args.kwargs["parameters"] == embeddings.query_params
+
+    async def test_aembed_query_uses_query_params(self, mocker: Any) -> None:
+        embeddings = PineconeEmbeddings(model=MODEL_NAME, pinecone_api_key=API_KEY)
+        mock_aembed = mocker.AsyncMock(return_value=[{"values": [0.1, 0.2, 0.3]}])
+        mocker.patch.object(embeddings, "_aembed_texts", mock_aembed)
+
+        await embeddings.aembed_query("test query")
+
+        assert mock_aembed.call_args.kwargs["parameters"] == embeddings.query_params
+
+    async def test_sparse_aembed_query_uses_query_params(self, mocker: Any) -> None:
+        sparse_embeddings = PineconeSparseEmbeddings(
+            model=SPARSE_MODEL_NAME, pinecone_api_key=API_KEY
+        )
+        mock_aembed = mocker.AsyncMock(
+            return_value=[{"sparse_indices": [0, 1], "sparse_values": [0.5, 0.5]}]
+        )
+        mocker.patch.object(sparse_embeddings, "_aembed_texts", mock_aembed)
+
+        await sparse_embeddings.aembed_query("test query")
+
+        assert (
+            mock_aembed.call_args.kwargs["parameters"] == sparse_embeddings.query_params
+        )
