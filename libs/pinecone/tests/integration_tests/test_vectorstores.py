@@ -46,6 +46,12 @@ class TestPinecone:
             metric=Metric.COSINE,
             spec=ServerlessSpec(cloud=CloudProvider.AWS, region=AwsRegion.US_WEST_2),
         )
+        # Wait for the freshly created index to be ready before any test uses it.
+        # Without this the first test races the index becoming queryable and its
+        # similarity_search comes back empty (the OpenAI embedding round-trip used
+        # to mask this by adding latency here).
+        while not client.describe_index(INDEX_NAME).status["ready"]:
+            time.sleep(1)
 
         self.index = client.Index(INDEX_NAME)
         self.pc = client
