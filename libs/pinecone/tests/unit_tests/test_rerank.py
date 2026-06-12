@@ -240,6 +240,17 @@ class TestPineconeRerank:
         assert results == []
         mock_pinecone_client.inference.rerank.assert_not_called()
 
+    def test_rerank_client_raises_propagates_exception(
+        self, mock_pinecone_client: MagicMock
+    ) -> None:
+        """Test that a client-side exception propagates instead of returning []."""
+        mock_pinecone_client.inference.rerank.side_effect = RuntimeError("API error")
+        reranker = PineconeRerank(
+            client=mock_pinecone_client, model="test-model", pinecone_api_key=API_KEY
+        )
+        with pytest.raises(RuntimeError, match="API error"):
+            reranker.rerank(["some document"], "query")
+
     @pytest.mark.parametrize(
         "model,expected_parameters",
         [
@@ -473,6 +484,22 @@ class TestPineconeRerank:
         results = await reranker.arerank([], "query")
         assert results == []
         mock_pinecone_async_client.inference.rerank.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_arerank_client_raises_propagates_exception(
+        self, mock_pinecone_async_client: MagicMock
+    ) -> None:
+        """Test that a client-side exception propagates instead of returning []."""
+        mock_pinecone_async_client.inference.rerank.side_effect = RuntimeError(
+            "API error"
+        )
+        reranker = PineconeRerank(
+            async_client=mock_pinecone_async_client,
+            model="test-model",
+            pinecone_api_key=API_KEY,
+        )
+        with pytest.raises(RuntimeError, match="API error"):
+            await reranker.arerank(["some document"], "query")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(

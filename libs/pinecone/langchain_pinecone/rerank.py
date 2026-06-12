@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Sequence, Union
 
@@ -14,8 +13,6 @@ from langchain_pinecone._utilities import (
     aget_pinecone_supported_models,
     get_pinecone_supported_models,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class PineconeRerank(BaseDocumentCompressor):
@@ -164,42 +161,37 @@ class PineconeRerank(BaseDocumentCompressor):
             for i, doc in enumerate(documents)
         ]
 
-        try:
-            client = self._get_sync_client()
+        client = self._get_sync_client()
 
-            # Use self.model if model is None
-            model_to_use = model if model is not None else self.model
-            if model_to_use is None:  # This should never happen due to validator
-                raise ValueError("No model specified for reranking")
+        # Use self.model if model is None
+        model_to_use = model if model is not None else self.model
+        if model_to_use is None:  # This should never happen due to validator
+            raise ValueError("No model specified for reranking")
 
-            rerank_result = client.inference.rerank(
-                model=model_to_use,
-                query=query,
-                documents=docs,
-                rank_fields=rank_fields or self.rank_fields or ["text"],
-                top_n=top_n or self.top_n,
-                return_documents=self.return_documents,
-                parameters=self._rerank_params(model=model_to_use, truncate=truncate),
-            )
+        rerank_result = client.inference.rerank(
+            model=model_to_use,
+            query=query,
+            documents=docs,
+            rank_fields=rank_fields or self.rank_fields or ["text"],
+            top_n=top_n or self.top_n,
+            return_documents=self.return_documents,
+            parameters=self._rerank_params(model=model_to_use, truncate=truncate),
+        )
 
-            result_dicts = []
-            for result_item_data in rerank_result.data:
-                result_dict = {
-                    "id": result_item_data.document.id,
-                    "index": result_item_data.index,
-                    "score": result_item_data.score,
-                }
+        result_dicts = []
+        for result_item_data in rerank_result.data:
+            result_dict = {
+                "id": result_item_data.document.id,
+                "index": result_item_data.index,
+                "score": result_item_data.score,
+            }
 
-                if self.return_documents:
-                    result_dict["document"] = result_item_data.document.to_dict()
+            if self.return_documents:
+                result_dict["document"] = result_item_data.document.to_dict()
 
-                result_dicts.append(result_dict)
+            result_dicts.append(result_dict)
 
-            return result_dicts
-
-        except Exception as e:
-            logger.error(f"Rerank error: {e}")
-            return []
+        return result_dicts
 
     async def arerank(
         self,
@@ -220,41 +212,37 @@ class PineconeRerank(BaseDocumentCompressor):
             for i, doc in enumerate(documents)
         ]
 
-        try:
-            client = await self._get_async_client()
+        client = await self._get_async_client()
 
-            # Use self.model if model is None
-            model_to_use = model if model is not None else self.model
-            if model_to_use is None:  # This should never happen due to validator
-                raise ValueError("No model specified for reranking")
+        # Use self.model if model is None
+        model_to_use = model if model is not None else self.model
+        if model_to_use is None:  # This should never happen due to validator
+            raise ValueError("No model specified for reranking")
 
-            rerank_result = await client.inference.rerank(
-                model=model_to_use,
-                query=query,
-                documents=docs,
-                rank_fields=rank_fields or self.rank_fields or ["text"],
-                top_n=top_n or self.top_n,
-                return_documents=self.return_documents,
-                parameters=self._rerank_params(model=model_to_use, truncate=truncate),
-            )
+        rerank_result = await client.inference.rerank(
+            model=model_to_use,
+            query=query,
+            documents=docs,
+            rank_fields=rank_fields or self.rank_fields or ["text"],
+            top_n=top_n or self.top_n,
+            return_documents=self.return_documents,
+            parameters=self._rerank_params(model=model_to_use, truncate=truncate),
+        )
 
-            result_dicts = []
-            for result_item_data in rerank_result.data:
-                result_dict = {
-                    "id": result_item_data.document.id,
-                    "index": result_item_data.index,
-                    "score": result_item_data.score,
-                }
+        result_dicts = []
+        for result_item_data in rerank_result.data:
+            result_dict = {
+                "id": result_item_data.document.id,
+                "index": result_item_data.index,
+                "score": result_item_data.score,
+            }
 
-                if self.return_documents:
-                    result_dict["document"] = result_item_data.document.to_dict()
+            if self.return_documents:
+                result_dict["document"] = result_item_data.document.to_dict()
 
-                result_dicts.append(result_dict)
+            result_dicts.append(result_dict)
 
-            return result_dicts
-        except Exception as e:
-            logger.error(f"Async rerank error: {e}")
-            return []
+        return result_dicts
 
     def compress_documents(
         self,
