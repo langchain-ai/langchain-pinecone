@@ -1,4 +1,5 @@
 import asyncio
+import os
 import time
 import uuid
 from datetime import datetime
@@ -8,16 +9,20 @@ import numpy as np
 import pinecone  # type: ignore
 import pytest  # type: ignore[import-not-found]
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings  # type: ignore[import-not-found]
+from langchain_core.utils import convert_to_secret_str
 from pinecone import AwsRegion, CloudProvider, Metric, ServerlessSpec
 from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
-from langchain_pinecone import PineconeVectorStore
+from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 
 # unique name of the index for this test run
 INDEX_NAME = f"langchain-test-vectorstores-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 NAMESPACE_NAME = "langchain-test-namespace"  # name of the namespace
-DIMENSION = 1536  # dimension of the embeddings
+# Pinecone-hosted inference model used to embed test text. Using Pinecone's own
+# inference endpoint keeps all integration traffic on the service under test
+# (no third-party embedding provider / API key required).
+MODEL = "multilingual-e5-large"
+DIMENSION = 1024  # dimension of the `multilingual-e5-large` embeddings
 
 DEFAULT_SLEEP = 15
 
@@ -68,17 +73,30 @@ class TestPinecone:
                     pass
             time.sleep(DEFAULT_SLEEP)  # wait for deletion to propagate
 
+    @pytest.fixture(autouse=True)
+    def patch_pinecone_model_listing(self, mocker: MockerFixture) -> None:
+        # Avoid a live model-catalog lookup during PineconeEmbeddings construction;
+        # the embed calls themselves still hit the live inference endpoint.
+        mocker.patch(
+            "langchain_pinecone.embeddings.PineconeEmbeddings.list_supported_models",
+            return_value=[{"model": MODEL}],
+        )
+
     @pytest.fixture
-    def embedding_openai(self) -> OpenAIEmbeddings:
-        return OpenAIEmbeddings()
+    def embeddings(self) -> PineconeEmbeddings:
+        return PineconeEmbeddings(
+            model=MODEL,
+            pinecone_api_key=convert_to_secret_str(
+                os.environ.get("PINECONE_API_KEY", "")
+            ),
+            dimension=DIMENSION,
+        )
 
     @pytest.fixture
     def texts(self) -> List[str]:
         return ["foo", "bar", "baz"]
 
-    def test_from_texts(
-        self, texts: List[str], embedding_openai: OpenAIEmbeddings
-    ) -> None:
+    def test_from_texts(self, texts: List[str], embeddings: PineconeEmbeddings) -> None:
         """Test end to end construction and search."""
         unique_id = uuid.uuid4().hex
         needs = f"foobuu {unique_id} booo"
@@ -86,7 +104,7 @@ class TestPinecone:
 
         docsearch = PineconeVectorStore.from_texts(
             texts=texts,
-            embedding=embedding_openai,
+            embedding=embeddings,
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
         )
@@ -97,7 +115,7 @@ class TestPinecone:
 
     @pytest.mark.asyncio
     async def test_afrom_texts(
-        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+        self, texts: List[str], embeddings: PineconeEmbeddings
     ) -> None:
         """Test end to end construction and search."""
         unique_id = uuid.uuid4().hex
@@ -106,7 +124,7 @@ class TestPinecone:
         print(f"texts: {texts}")  # noqa: T201
         docsearch = await PineconeVectorStore.afrom_texts(
             texts=texts,
-            embedding=embedding_openai,
+            embedding=embeddings,
             index_name=INDEX_NAME,
             namespace=f"{NAMESPACE_NAME}-afrom-texts",
         )
@@ -121,7 +139,7 @@ class TestPinecone:
         assert output == [Document(page_content=needs)]
 
     def test_from_texts_with_metadatas(
-        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+        self, texts: List[str], embeddings: PineconeEmbeddings
     ) -> None:
         """Test end to end construction and search."""
 
@@ -134,7 +152,7 @@ class TestPinecone:
         namespace = f"{NAMESPACE_NAME}-md"
         docsearch = PineconeVectorStore.from_texts(
             texts,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
             namespace=namespace,
@@ -148,7 +166,7 @@ class TestPinecone:
 
     @pytest.mark.asyncio
     async def test_afrom_texts_with_metadatas(
-        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+        self, texts: List[str], embeddings: PineconeEmbeddings
     ) -> None:
         """Test end to end construction and search."""
 
@@ -161,7 +179,7 @@ class TestPinecone:
         namespace = f"{NAMESPACE_NAME}-md"
         docsearch = await PineconeVectorStore.afrom_texts(
             texts,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
             namespace=namespace,
@@ -175,7 +193,7 @@ class TestPinecone:
 
     @pytest.mark.asyncio
     async def test_aadd_documents(
-        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+        self, texts: List[str], embeddings: PineconeEmbeddings
     ) -> None:
         """Test adding documents to existing index."""
 
@@ -183,7 +201,7 @@ class TestPinecone:
         metadatas = [{"page": i} for i in range(len(texts_1))]
         docsearch = await PineconeVectorStore.afrom_texts(
             texts_1,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
             namespace=f"{INDEX_NAME}-1",
@@ -227,13 +245,13 @@ class TestPinecone:
             f"Expected id to be a string, got {output[0]}"
         )
 
-    def test_from_texts_with_scores(self, embedding_openai: OpenAIEmbeddings) -> None:
+    def test_from_texts_with_scores(self, embeddings: PineconeEmbeddings) -> None:
         """Test end to end construction and search with scores and IDs."""
         texts = ["foo", "bar", "baz"]
         metadatas = [{"page": i} for i in range(len(texts))]
         docsearch = PineconeVectorStore.from_texts(
             texts,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
             namespace=NAMESPACE_NAME,
@@ -259,7 +277,7 @@ class TestPinecone:
 
     @pytest.mark.asyncio
     async def test_afrom_texts_with_scores(
-        self, embedding_openai: OpenAIEmbeddings
+        self, embeddings: PineconeEmbeddings
     ) -> None:
         """Test end to end construction and search with scores and IDs."""
         texts = ["foo", "bar", "baz"]
@@ -267,7 +285,7 @@ class TestPinecone:
         print("metadatas", metadatas)  # noqa: T201
         docsearch = await PineconeVectorStore.afrom_texts(
             texts,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
             namespace=NAMESPACE_NAME,
@@ -295,7 +313,7 @@ class TestPinecone:
         self.index.delete(delete_all=True, namespace=NAMESPACE_NAME)
 
     def test_from_existing_index_with_namespaces(
-        self, embedding_openai: OpenAIEmbeddings
+        self, embeddings: PineconeEmbeddings
     ) -> None:
         """Test that namespaces are properly handled."""
         # Create two indexes with the same name but different namespaces
@@ -303,7 +321,7 @@ class TestPinecone:
         metadatas = [{"page": i} for i in range(len(texts_1))]
         PineconeVectorStore.from_texts(
             texts_1,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
             namespace=f"{INDEX_NAME}-1",
@@ -314,7 +332,7 @@ class TestPinecone:
 
         PineconeVectorStore.from_texts(
             texts_2,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
             namespace=f"{INDEX_NAME}-2",
@@ -325,7 +343,7 @@ class TestPinecone:
         # Search with namespace
         docsearch = PineconeVectorStore.from_existing_index(
             index_name=INDEX_NAME,
-            embedding=embedding_openai,
+            embedding=embeddings,
             namespace=f"{INDEX_NAME}-1",
         )
         output = docsearch.similarity_search("foo", k=20, namespace=f"{INDEX_NAME}-1")
@@ -335,13 +353,13 @@ class TestPinecone:
         assert all(content not in ["foo2", "bar2", "baz2"] for content in page_contents)
 
     def test_add_documents_with_ids(
-        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+        self, texts: List[str], embeddings: PineconeEmbeddings
     ) -> None:
         ids = [uuid.uuid4().hex for _ in range(len(texts))]
         PineconeVectorStore.from_texts(
             texts=texts,
             ids=ids,
-            embedding=embedding_openai,
+            embedding=embeddings,
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
         )
@@ -353,7 +371,7 @@ class TestPinecone:
         PineconeVectorStore.from_texts(
             texts=[t + "-1" for t in texts],
             ids=ids_1,
-            embedding=embedding_openai,
+            embedding=embeddings,
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
         )
@@ -366,13 +384,13 @@ class TestPinecone:
         # assert index_stats["total_vector_count"] == len(texts) * 2
 
     @pytest.mark.xfail(reason="relevance score just over 1")
-    def test_relevance_score_bound(self, embedding_openai: OpenAIEmbeddings) -> None:
+    def test_relevance_score_bound(self, embeddings: PineconeEmbeddings) -> None:
         """Ensures all relevance scores are between 0 and 1."""
         texts = ["foo", "bar", "baz"]
         metadatas = [{"page": i} for i in range(len(texts))]
         docsearch = PineconeVectorStore.from_texts(
             texts,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
         )
@@ -386,15 +404,13 @@ class TestPinecone:
 
     @pytest.mark.asyncio
     @pytest.mark.xfail(reason="relevance score just over 1")
-    async def test_arelevance_score_bound(
-        self, embedding_openai: OpenAIEmbeddings
-    ) -> None:
+    async def test_arelevance_score_bound(self, embeddings: PineconeEmbeddings) -> None:
         """Ensures all relevance scores are between 0 and 1."""
         texts = ["foo", "bar", "baz"]
         metadatas = [{"page": i} for i in range(len(texts))]
         docsearch = await PineconeVectorStore.afrom_texts(
             texts,
-            embedding_openai,
+            embeddings,
             index_name=INDEX_NAME,
             metadatas=metadatas,
         )
@@ -438,7 +454,7 @@ class TestPinecone:
         embeddings_chunk_size: int,
         data_multiplier: int,
         documents: List[Document],
-        embedding_openai: OpenAIEmbeddings,
+        embeddings: PineconeEmbeddings,
     ) -> None:
         """Test end to end construction and search."""
 
@@ -447,7 +463,7 @@ class TestPinecone:
         metadatas = [{"page": i} for i in range(len(texts))]
         docsearch = PineconeVectorStore.from_texts(
             texts,
-            embedding_openai,
+            embeddings,
             ids=uuids,
             metadatas=metadatas,
             index_name=INDEX_NAME,
@@ -475,23 +491,23 @@ class TestPinecone:
 
     @pytest.mark.usefixtures("mock_pool_not_supported")
     def test_that_async_freq_uses_multiprocessing(
-        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+        self, texts: List[str], embeddings: PineconeEmbeddings
     ) -> None:
         with pytest.raises(OSError):
             PineconeVectorStore.from_texts(
                 texts=texts,
-                embedding=embedding_openai,
+                embedding=embeddings,
                 index_name=INDEX_NAME,
                 namespace=NAMESPACE_NAME,
             )
 
     @pytest.mark.usefixtures("mock_pool_not_supported")
     def test_that_async_freq_false_enabled_singlethreading(
-        self, texts: List[str], embedding_openai: OpenAIEmbeddings
+        self, texts: List[str], embeddings: PineconeEmbeddings
     ) -> None:
         PineconeVectorStore.from_texts(
             texts=texts,
-            embedding=embedding_openai,
+            embedding=embeddings,
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
             async_req=False,  # force single-threaded path

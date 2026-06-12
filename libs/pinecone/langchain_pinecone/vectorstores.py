@@ -73,19 +73,20 @@ class PineconeVectorStore(VectorStore):
         import time
         import os
         from pinecone import Pinecone, ServerlessSpec
-        from langchain_pinecone import PineconeVectorStore
-        from langchain_openai import OpenAIEmbeddings
+        from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 
         pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
 
         index_name = "langchain-test-index"  # change if desired
+
+        embedding = PineconeEmbeddings(model="multilingual-e5-large")
 
         existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
 
         if index_name not in existing_indexes:
             pc.create_index(
                 name=index_name,
-                dimension=1536,
+                dimension=1024,
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1"),
                 deletion_protection="enabled",  # Defaults to "disabled"
@@ -94,7 +95,7 @@ class PineconeVectorStore(VectorStore):
                 time.sleep(1)
 
         index = pc.Index(index_name)
-        vector_store = PineconeVectorStore(index=index, embedding=OpenAIEmbeddings())
+        vector_store = PineconeVectorStore(index=index, embedding=embedding)
         ```
 
     Add Documents:
