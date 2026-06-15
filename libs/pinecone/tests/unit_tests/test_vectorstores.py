@@ -1,11 +1,12 @@
 import logging
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING, Callable, Type
 from unittest.mock import ANY, Mock, call
 
 import pytest
 from pinecone import PineconeAsyncio, SparseValues  # type: ignore[import-untyped]
 from pytest_mock import AsyncMockType, MockerFixture, MockType
 
+from langchain_pinecone._utilities import DistanceStrategy
 from langchain_pinecone.embeddings import PineconeEmbeddings, PineconeSparseEmbeddings
 from langchain_pinecone.vectorstores import PineconeVectorStore
 from langchain_pinecone.vectorstores_sparse import PineconeSparseVectorStore
@@ -960,3 +961,173 @@ async def test_afrom_texts_orchestration(
     assert isinstance(result, PineconeVectorStore)
     mock_embedding.aembed_documents.assert_called_once_with(texts)
     mock_async_index.upsert.assert_called_once()
+
+
+# --- TC-006: PineconeVectorStore edge paths and relevance scoring ---
+
+
+def test_search_skips_match_without_text_key(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """similarity_search_by_vector_with_score skips a match missing text_key and logs a warning."""
+    mock_index.query = mocker.Mock(
+        return_value={
+            "matches": [
+                {
+                    "metadata": {"text": "valid doc", "extra": "x"},
+                    "score": 0.9,
+                    "id": "good",
+                },
+                {"metadata": {"source": "no-text"}, "score": 0.5, "id": "bad"},
+            ]
+        }
+    )
+    vectorstore = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
+    with caplog.at_level(logging.WARNING, logger="langchain_pinecone.vectorstores"):
+        results = vectorstore.similarity_search_by_vector_with_score([0.1, 0.2, 0.3])
+
+    assert len(results) == 1
+    doc, score = results[0]
+    assert doc.page_content == "valid doc"
+    assert score == 0.9
+    assert "Skipping" in caplog.text
+
+
+async def test_asearch_skips_match_without_text_key(
+    mocker: MockerFixture,
+    mock_async_index: AsyncMockType,
+    mock_embedding: AsyncMockType,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """asimilarity_search_by_vector_with_score skips a match missing text_key and logs a warning."""
+    mock_async_index.query = mocker.AsyncMock(
+        return_value={
+            "matches": [
+                {
+                    "metadata": {"text": "valid doc", "extra": "x"},
+                    "score": 0.9,
+                    "id": "good",
+                },
+                {"metadata": {"source": "no-text"}, "score": 0.5, "id": "bad"},
+            ]
+        }
+    )
+    vectorstore = PineconeVectorStore(
+        index=mock_async_index, embedding=mock_embedding, text_key="text"
+    )
+    with caplog.at_level(logging.WARNING, logger="langchain_pinecone.vectorstores"):
+        results = await vectorstore.asimilarity_search_by_vector_with_score(
+            [0.1, 0.2, 0.3]
+        )
+
+    assert len(results) == 1
+    doc, score = results[0]
+    assert doc.page_content == "valid doc"
+    assert score == 0.9
+    assert "Skipping" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "strategy,expected_fn",
+    [
+        (DistanceStrategy.COSINE, PineconeVectorStore._cosine_relevance_score_fn),
+        (
+            DistanceStrategy.MAX_INNER_PRODUCT,
+            PineconeVectorStore._max_inner_product_relevance_score_fn,
+        ),
+        (
+            DistanceStrategy.EUCLIDEAN_DISTANCE,
+            PineconeVectorStore._euclidean_relevance_score_fn,
+        ),
+    ],
+)
+def test_select_relevance_score_fn_per_strategy(
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+    strategy: DistanceStrategy,
+    expected_fn: Callable[[float], float],
+) -> None:
+    """_select_relevance_score_fn returns the expected callable for each DistanceStrategy."""
+    vectorstore = PineconeVectorStore(
+        index=mock_index,
+        embedding=mock_embedding,
+        text_key="text",
+        distance_strategy=strategy,
+    )
+    fn = vectorstore._select_relevance_score_fn()
+    assert fn is expected_fn
+
+
+def test_select_relevance_score_fn_raises_for_unknown_strategy(
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """_select_relevance_score_fn raises ValueError for an unrecognized strategy."""
+    vectorstore = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
+    vectorstore.distance_strategy = "UNKNOWN"  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="Unknown distance strategy"):
+        vectorstore._select_relevance_score_fn()
+
+
+def test_cosine_relevance_score_fn() -> None:
+    """_cosine_relevance_score_fn maps Pinecone's [-1, 1] score to [0, 1] via (score + 1) / 2."""
+    assert PineconeVectorStore._cosine_relevance_score_fn(-1.0) == pytest.approx(0.0)
+    assert PineconeVectorStore._cosine_relevance_score_fn(1.0) == pytest.approx(1.0)
+    assert PineconeVectorStore._cosine_relevance_score_fn(0.0) == pytest.approx(0.5)
+
+
+def test_sync_query_rejects_applyresult(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """similarity_search_by_vector_with_score raises ValueError when index.query returns ApplyResult."""
+    try:
+        from pinecone.db_data.index import ApplyResult
+    except ImportError:
+        from pinecone.data.index import ApplyResult
+
+    mock_index.query = mocker.Mock(return_value=object.__new__(ApplyResult))
+    vectorstore = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
+    with pytest.raises(ValueError, match="asynchronous result from synchronous call"):
+        vectorstore.similarity_search_by_vector_with_score([0.1, 0.2, 0.3])
+
+
+def test_mmr_sync_query_rejects_applyresult(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """max_marginal_relevance_search_by_vector raises ValueError when index.query returns ApplyResult."""
+    try:
+        from pinecone.db_data.index import ApplyResult
+    except ImportError:
+        from pinecone.data.index import ApplyResult
+
+    mock_index.query = mocker.Mock(return_value=object.__new__(ApplyResult))
+    vectorstore = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
+    with pytest.raises(ValueError, match="asynchronous result from synchronous call"):
+        vectorstore.max_marginal_relevance_search_by_vector([0.1, 0.2, 0.3])
+
+
+def test_delete_requires_an_argument(
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """delete() raises ValueError when none of ids, delete_all, or filter is provided."""
+    vectorstore = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
+    with pytest.raises(ValueError, match="ids, delete_all, or filter"):
+        vectorstore.delete()
