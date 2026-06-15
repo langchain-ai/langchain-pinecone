@@ -1,10 +1,14 @@
+import sys
 import unittest
+import unittest.mock
 import warnings
 
 import numpy as np
 from pinecone import SparseValues  # type: ignore[import-untyped]
 
 from langchain_pinecone._utilities import (
+    cosine_similarity,
+    maximal_marginal_relevance,
     sparse_cosine_similarity,
     sparse_maximal_marginal_relevance,
 )
@@ -223,3 +227,118 @@ class TestSparseUtilities(unittest.TestCase):
             assert len(w) == 0, (
                 f"Numpy v1 -> v2 promotion warnings raised for `sparse_maximal_marginal_relevance`: {w}"
             )
+
+
+class TestDenseUtilities(unittest.TestCase):
+    def _force_numpy(self, X: list, Y: list) -> np.ndarray:
+        """Call cosine_similarity with the simsimd import forced to fail."""
+        with unittest.mock.patch.dict(sys.modules, {"simsimd": None}):
+            return cosine_similarity(X, Y)
+
+    def test_cosine_similarity_numpy_fallback(self) -> None:
+        """NumPy fallback: identical, orthogonal, and partial-overlap vectors."""
+        # Identical vectors → 1.0
+        result = self._force_numpy([[1.0, 0.0, 0.0]], [[1.0, 0.0, 0.0]])
+        self.assertAlmostEqual(float(result[0][0]), 1.0, places=6)
+
+        # Orthogonal vectors → 0.0
+        result = self._force_numpy([[1.0, 0.0]], [[0.0, 1.0]])
+        self.assertAlmostEqual(float(result[0][0]), 0.0, places=6)
+
+        # Partial overlap: [1,1,0]·[1,0,1]=1, |x|=√2, |y|=√2 → 0.5
+        result = self._force_numpy([[1.0, 1.0, 0.0]], [[1.0, 0.0, 1.0]])
+        self.assertAlmostEqual(float(result[0][0]), 0.5, places=6)
+
+    def test_cosine_similarity_simsimd_path(self) -> None:
+        """simsimd path agrees with NumPy fallback within 1e-5."""
+        try:
+            import simsimd  # noqa: F401
+        except ImportError:
+            self.skipTest("simsimd not installed")
+
+        X = [[1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]]
+        Y = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+        simd_result = cosine_similarity(X, Y)
+        numpy_result = self._force_numpy(X, Y)
+        np.testing.assert_allclose(simd_result, numpy_result, atol=1e-5)
+
+    def test_cosine_similarity_shape_mismatch_raises(self) -> None:
+        """ValueError raised when X and Y have different column counts."""
+        with self.assertRaises(ValueError):
+            cosine_similarity([[1.0, 0.0]], [[1.0, 0.0, 0.0]])
+
+    def test_cosine_similarity_empty_inputs(self) -> None:
+        """Empty X or Y returns an empty array."""
+        self.assertEqual(len(cosine_similarity([], [[1.0]])), 0)
+        self.assertEqual(len(cosine_similarity([[1.0]], [])), 0)
+
+    def test_cosine_similarity_zero_norm_no_nan(self) -> None:
+        """Zero-norm row in NumPy fallback yields 0.0, not NaN or inf."""
+        result = self._force_numpy([[0.0, 0.0, 0.0]], [[1.0, 0.0, 0.0]])
+        self.assertFalse(bool(np.isnan(result).any()))
+        self.assertFalse(bool(np.isinf(result).any()))
+        self.assertAlmostEqual(float(result[0][0]), 0.0, places=6)
+
+    def test_maximal_marginal_relevance_lambda_extremes(self) -> None:
+        """lambda=1.0 orders by similarity; lambda=0.0 prioritises diversity."""
+        query = np.array([1.0, 0.0, 0.0])
+        embeddings = [
+            [1.0, 0.0, 0.0],  # 0: sim=1.0 (most similar to query)
+            [0.9, 0.436, 0.0],  # 1: sim≈0.9 (second most similar; vector ≈ unit length)
+            [0.0, 1.0, 0.0],  # 2: sim=0.0 (orthogonal)
+            [0.0, 0.0, 1.0],  # 3: sim=0.0 (orthogonal)
+        ]
+
+        # lambda=1.0: picks by descending query-similarity → [0, 1]
+        result = maximal_marginal_relevance(query, embeddings, lambda_mult=1.0, k=2)
+        self.assertEqual(result[0], 0)
+        self.assertEqual(result[1], 1)
+
+        # lambda=0.0: first pick is always most similar (0), second maximises diversity
+        # from selected {0=[1,0,0]}: candidates 2 and 3 are orthogonal (score=0),
+        # candidate 1 is near-collinear (score≈-0.9) → second pick is 2 or 3
+        result = maximal_marginal_relevance(query, embeddings, lambda_mult=0.0, k=2)
+        self.assertEqual(result[0], 0)
+        self.assertIn(result[1], [2, 3])
+
+    def test_maximal_marginal_relevance_edge_cases(self) -> None:
+        """k=0 returns []; empty embeddings returns []; k>len returns all indices."""
+        query = np.array([1.0, 0.0])
+        embeddings = [[1.0, 0.0], [0.0, 1.0]]
+
+        self.assertEqual(maximal_marginal_relevance(query, embeddings, k=0), [])
+        self.assertEqual(maximal_marginal_relevance(query, [], k=2), [])
+
+        result = maximal_marginal_relevance(query, embeddings, k=5)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(set(result), {0, 1})
+
+    def test_dense_mmr_no_numpy_promotion_warnings(self) -> None:
+        """No NumPy v1→v2 promotion warnings from dense cosine_similarity or MMR."""
+        if hasattr(np, "_set_promotion_state"):
+            np._set_promotion_state("weak_and_warn")
+
+        query = np.array([1.0, 0.0, 0.0])
+        embeddings = [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.5, 0.5, 0.0],
+        ]
+
+        with unittest.mock.patch.dict(sys.modules, {"simsimd": None}):
+            with warnings.catch_warnings(record=True) as w:
+                _ = cosine_similarity([[1.0, 2.0]], [[1.0, 2.0]])
+                self.assertEqual(
+                    len(w),
+                    0,
+                    f"NumPy v1→v2 promotion warnings raised for `cosine_similarity`: {w}",
+                )
+
+            with warnings.catch_warnings(record=True) as w:
+                _ = maximal_marginal_relevance(query, embeddings, lambda_mult=1.0, k=3)
+                self.assertEqual(
+                    len(w),
+                    0,
+                    f"NumPy v1→v2 promotion warnings raised for `maximal_marginal_relevance`: {w}",
+                )
