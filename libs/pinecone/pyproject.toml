@@ -8,7 +8,6 @@ license = { text = "MIT" }
 requires-python = "<3.14,>=3.10"
 dependencies = [
     "langchain-core<2.0.0,>=1.2.11",
-    "langsmith>=0.6.3",
     "pinecone[asyncio]>=6.0.0,<8.0.0",
     "numpy>=1.26.4,!=2.0.2",
     "httpx>=0.28.0",
