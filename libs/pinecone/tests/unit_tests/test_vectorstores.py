@@ -1,3 +1,4 @@
+import logging
 from typing import TYPE_CHECKING, Type
 from unittest.mock import ANY, Mock, call
 
@@ -666,3 +667,190 @@ async def test_asimilarity_search_by_vector_with_score__defaults_to_store_namesp
     )
 
     assert mock_async_index.query.call_args.kwargs["namespace"] == "default-ns"
+
+
+def test_sparse_similarity_search_by_vector_with_score(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_sparse_embedding: AsyncMockType,
+) -> None:
+    """Sync sparse similarity search returns (Document, score) with correct fields."""
+    mock_index.query = mocker.Mock(
+        return_value={
+            "matches": [
+                {
+                    "metadata": {"text": "test doc", "source": "unit"},
+                    "score": 0.9,
+                    "id": "doc-1",
+                }
+            ]
+        }
+    )
+    vectorstore = PineconeSparseVectorStore(
+        index=mock_index, embedding=mock_sparse_embedding, text_key="text"
+    )
+    embedding = SparseValues(indices=[0, 1], values=[0.5, 0.3])
+    results = vectorstore.similarity_search_by_vector_with_score(embedding)
+
+    assert len(results) == 1
+    doc, score = results[0]
+    assert doc.page_content == "test doc"
+    assert doc.metadata == {"source": "unit"}
+    assert doc.id == "doc-1"
+    assert score == 0.9
+    assert mock_index.query.call_args.kwargs["sparse_vector"] == embedding
+
+
+@pytest.mark.asyncio
+async def test_asparse_similarity_search_by_vector_with_score(
+    mocker: MockerFixture,
+    mock_async_index: MockType,
+    mock_sparse_embedding: AsyncMockType,
+) -> None:
+    """Async sparse similarity search returns (Document, score) with correct fields."""
+    mock_async_index.query = mocker.AsyncMock(
+        return_value={
+            "matches": [
+                {
+                    "metadata": {"text": "test doc", "source": "unit"},
+                    "score": 0.9,
+                    "id": "doc-1",
+                }
+            ]
+        }
+    )
+    vectorstore = PineconeSparseVectorStore(
+        index=mock_async_index, embedding=mock_sparse_embedding, text_key="text"
+    )
+    embedding = SparseValues(indices=[0, 1], values=[0.5, 0.3])
+    results = await vectorstore.asimilarity_search_by_vector_with_score(embedding)
+
+    assert len(results) == 1
+    doc, score = results[0]
+    assert doc.page_content == "test doc"
+    assert doc.metadata == {"source": "unit"}
+    assert doc.id == "doc-1"
+    assert score == 0.9
+    assert mock_async_index.query.call_args.kwargs["sparse_vector"] == embedding
+
+
+def test_sparse_mmr_search_by_vector(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_sparse_embedding: AsyncMockType,
+) -> None:
+    """Sync MMR search sets include_values=True and returns MMR-selected documents."""
+    sparse_vals = {"indices": [0, 1], "values": [0.5, 0.3]}
+    mock_index.query = mocker.Mock(
+        return_value={
+            "matches": [
+                {
+                    "metadata": {"text": "doc 1", "source": "a"},
+                    "score": 0.9,
+                    "id": "id-1",
+                    "sparse_values": sparse_vals,
+                },
+                {
+                    "metadata": {"text": "doc 2", "source": "b"},
+                    "score": 0.8,
+                    "id": "id-2",
+                    "sparse_values": sparse_vals,
+                },
+            ]
+        }
+    )
+    mocker.patch(
+        "langchain_pinecone.vectorstores_sparse.sparse_maximal_marginal_relevance",
+        return_value=[0],
+    )
+    vectorstore = PineconeSparseVectorStore(
+        index=mock_index, embedding=mock_sparse_embedding, text_key="text"
+    )
+    embedding = SparseValues(indices=[0, 1], values=[0.5, 0.3])
+    results = vectorstore.max_marginal_relevance_search_by_vector(embedding, k=1)
+
+    assert mock_index.query.call_args.kwargs["include_values"] is True
+    assert len(results) == 1
+    assert results[0].page_content == "doc 1"
+
+
+@pytest.mark.asyncio
+async def test_asparse_mmr_search_by_vector(
+    mocker: MockerFixture,
+    mock_async_index: MockType,
+    mock_sparse_embedding: AsyncMockType,
+) -> None:
+    """Async MMR search sets include_values=True and returns MMR-selected documents."""
+    sparse_vals = {"indices": [0, 1], "values": [0.5, 0.3]}
+    mock_async_index.query = mocker.AsyncMock(
+        return_value={
+            "matches": [
+                {
+                    "metadata": {"text": "doc 1", "source": "a"},
+                    "score": 0.9,
+                    "id": "id-1",
+                    "sparse_values": sparse_vals,
+                },
+                {
+                    "metadata": {"text": "doc 2", "source": "b"},
+                    "score": 0.8,
+                    "id": "id-2",
+                    "sparse_values": sparse_vals,
+                },
+            ]
+        }
+    )
+    mocker.patch(
+        "langchain_pinecone.vectorstores_sparse.sparse_maximal_marginal_relevance",
+        return_value=[0],
+    )
+    vectorstore = PineconeSparseVectorStore(
+        index=mock_async_index, embedding=mock_sparse_embedding, text_key="text"
+    )
+    embedding = SparseValues(indices=[0, 1], values=[0.5, 0.3])
+    results = await vectorstore.amax_marginal_relevance_search_by_vector(embedding, k=1)
+
+    assert mock_async_index.query.call_args.kwargs["include_values"] is True
+    assert len(results) == 1
+    assert results[0].page_content == "doc 1"
+
+
+def test_sparse_search_skips_match_without_text_key(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_sparse_embedding: AsyncMockType,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A match missing text_key is skipped and a warning is logged."""
+    mock_index.query = mocker.Mock(
+        return_value={
+            "matches": [
+                {"metadata": {"source": "no-text"}, "score": 0.9, "id": "bad"},
+                {"metadata": {"text": "valid doc"}, "score": 0.8, "id": "good"},
+            ]
+        }
+    )
+    vectorstore = PineconeSparseVectorStore(
+        index=mock_index, embedding=mock_sparse_embedding, text_key="text"
+    )
+    embedding = SparseValues(indices=[0], values=[0.5])
+    with caplog.at_level(
+        logging.WARNING, logger="langchain_pinecone.vectorstores_sparse"
+    ):
+        results = vectorstore.similarity_search_by_vector_with_score(embedding)
+
+    assert len(results) == 1
+    assert results[0][0].page_content == "valid doc"
+    assert "Skipping" in caplog.text
+
+
+def test_sparse_vectorstore_rejects_dense_index(
+    mock_index: MockType,
+    mock_sparse_embedding: AsyncMockType,
+) -> None:
+    """Construction raises ValueError when the index's vector_type is not sparse."""
+    mock_index.describe_index_stats.return_value = {"vector_type": "dense"}
+    with pytest.raises(ValueError, match="Sparse Indexes"):
+        PineconeSparseVectorStore(
+            index=mock_index, embedding=mock_sparse_embedding, text_key="text"
+        )
