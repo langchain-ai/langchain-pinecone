@@ -29,6 +29,7 @@ test = [
     "pytest>=9.0.3,<10",
     "freezegun<2.0.0,>=1.2.2",
     "pytest-mock<4.0.0,>=3.10.0",
+    "pytest-cov>=6.0.0,<7",
     "syrupy>=5.0.0,<6",
     "pytest-watcher<1.0.0,>=0.3.4",
     "pytest-asyncio>=1.0.0,<2",
@@ -58,6 +59,7 @@ select = ["E", "F", "I", "T201", "NPY201"]
 ignore = ["E501"]
 
 [tool.coverage.run]
+source = ["langchain_pinecone"]
 omit = ["tests/*"]
 
 [tool.pytest.ini_options]

@@ -1,4 +1,4 @@
-.PHONY: all format lint test tests integration_tests docker_tests help extended_tests
+.PHONY: all format lint test tests test_cov integration_tests docker_tests help extended_tests
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -12,6 +12,11 @@ integration_test integration_tests: TEST_FILE = tests/integration_tests/
 
 test tests:
 	uv run --group test pytest --disable-socket --allow-unix-socket $(TEST_FILE)
+
+test_cov:
+	uv run --group test pytest --disable-socket --allow-unix-socket \
+		--cov=langchain_pinecone --cov-report=term-missing --cov-report=xml \
+		$(TEST_FILE)
 
 integration_test integration_tests:
 	uv run --group test --group test_integration pytest -vvv $(TEST_FILE)
@@ -62,4 +67,5 @@ help:
 	@echo 'lint                         - run linters'
 	@echo 'test                         - run unit tests'
 	@echo 'tests                        - run unit tests'
+	@echo 'test_cov                     - run unit tests with coverage report'
 	@echo 'test TEST_FILE=<test_file>   - run all tests in file'
