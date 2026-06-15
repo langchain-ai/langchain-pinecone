@@ -27,12 +27,12 @@ repository = "https://github.com/langchain-ai/langchain-pinecone"
 
 [dependency-groups]
 test = [
-    "pytest<9,>=8",
+    "pytest>=9.0.3,<10",
     "freezegun<2.0.0,>=1.2.2",
     "pytest-mock<4.0.0,>=3.10.0",
-    "syrupy<5.0.0,>=4.0.2",
+    "syrupy>=5.0.0,<6",
     "pytest-watcher<1.0.0,>=0.3.4",
-    "pytest-asyncio<1,>=0.25.0",
+    "pytest-asyncio>=1.0.0,<2",
     "pytest-socket<1.0.0,>=0.7.0",
     "langchain-tests>=0.3.17",
 ]
