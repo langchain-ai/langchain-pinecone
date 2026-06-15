@@ -854,3 +854,109 @@ def test_sparse_vectorstore_rejects_dense_index(
         PineconeSparseVectorStore(
             index=mock_index, embedding=mock_sparse_embedding, text_key="text"
         )
+
+
+# --- TC-005: PineconeVectorStore constructor entrypoints ---
+
+
+def test_get_pinecone_index_returns_named(
+    mocker: MockerFixture, mock_index: MockType
+) -> None:
+    """get_pinecone_index returns the named Index when the name is present in the project."""
+    mock_client_cls = mocker.patch("langchain_pinecone.vectorstores.PineconeClient")
+    mock_client = mock_client_cls.return_value
+    mock_client.Index.return_value = mock_index
+
+    existing = mocker.Mock()
+    existing.name = "my-index"
+    mock_client.list_indexes.return_value.index_list = {"indexes": [existing]}
+
+    result = PineconeVectorStore.get_pinecone_index(
+        "my-index", pinecone_api_key="test-key"
+    )
+
+    assert result is mock_index
+    mock_client.Index.assert_called_once_with("my-index")
+
+
+def test_get_pinecone_index_no_indexes_raises(mocker: MockerFixture) -> None:
+    """get_pinecone_index raises ValueError when the project has no active indexes."""
+    mock_client_cls = mocker.patch("langchain_pinecone.vectorstores.PineconeClient")
+    mock_client_cls.return_value.list_indexes.return_value.index_list = {"indexes": []}
+
+    with pytest.raises(ValueError, match="No active indexes"):
+        PineconeVectorStore.get_pinecone_index("any-name", pinecone_api_key="test-key")
+
+
+def test_get_pinecone_index_unknown_name_raises(mocker: MockerFixture) -> None:
+    """get_pinecone_index raises ValueError listing the existing indexes when name not found."""
+    mock_client_cls = mocker.patch("langchain_pinecone.vectorstores.PineconeClient")
+    existing = mocker.Mock()
+    existing.name = "other-index"
+    mock_client_cls.return_value.list_indexes.return_value.index_list = {
+        "indexes": [existing]
+    }
+
+    with pytest.raises(ValueError, match="other-index"):
+        PineconeVectorStore.get_pinecone_index("my-index", pinecone_api_key="test-key")
+
+
+def test_from_texts_orchestration(
+    mocker: MockerFixture, mock_index: MockType, mock_embedding: AsyncMockType
+) -> None:
+    """from_texts wires get_pinecone_index → constructor → add_texts and returns the store."""
+    mocker.patch.object(
+        PineconeVectorStore, "get_pinecone_index", return_value=mock_index
+    )
+    mock_embedding.embed_documents = mocker.Mock(
+        return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+    )
+
+    texts = ["text one", "text two"]
+    result = PineconeVectorStore.from_texts(
+        texts, mock_embedding, index_name="my-index", async_req=False
+    )
+
+    assert isinstance(result, PineconeVectorStore)
+    mock_embedding.embed_documents.assert_called_once_with(texts)
+    mock_index.upsert.assert_called_once()
+
+
+def test_from_existing_index_builds_store(
+    mocker: MockerFixture, mock_index: MockType, mock_embedding: AsyncMockType
+) -> None:
+    """from_existing_index constructs the store from a resolved index without embedding calls."""
+    mocker.patch.object(
+        PineconeVectorStore, "get_pinecone_index", return_value=mock_index
+    )
+
+    result = PineconeVectorStore.from_existing_index("my-index", mock_embedding)
+
+    assert isinstance(result, PineconeVectorStore)
+    mock_embedding.embed_documents.assert_not_called()
+    mock_embedding.aembed_documents.assert_not_called()
+
+
+async def test_afrom_texts_orchestration(
+    mocker: MockerFixture,
+    mock_embedding: AsyncMockType,
+    mock_pinecone_client: MockType,
+    mock_async_client: AsyncMockType,
+    mock_async_index: AsyncMockType,
+) -> None:
+    """afrom_texts constructs via index_name and delegates to aadd_texts."""
+    mock_embedding.aembed_documents = mocker.AsyncMock(
+        return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+    )
+
+    texts = ["text one", "text two"]
+    result = await PineconeVectorStore.afrom_texts(
+        texts,
+        mock_embedding,
+        index_name="my-index",
+        pinecone_api_key="test-key",
+    )
+
+    assert isinstance(result, PineconeVectorStore)
+    mock_embedding.aembed_documents.assert_called_once_with(texts)
+    mock_async_index.upsert.assert_called_once()
