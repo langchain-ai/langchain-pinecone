@@ -11,7 +11,6 @@ dependencies = [
     "pinecone[asyncio]>=6.0.0,<8.0.0",
     "numpy>=1.26.4,!=2.0.2",
     "httpx>=0.28.0",
-    "simsimd>=5.9.11",
     "pydantic>=2.11.1",
 ]
 name = "langchain-pinecone"
@@ -24,6 +23,9 @@ readme = "README.md"
 "Release Notes" = "https://github.com/langchain-ai/langchain/releases?q=tag%3A%22langchain-pinecone%3D%3D0%22&expanded=true"
 repository = "https://github.com/langchain-ai/langchain-pinecone"
 
+[project.optional-dependencies]
+speedups = ["simsimd>=5.9.11"]
+
 [dependency-groups]
 test = [
     "pytest>=9.0.3,<10",
@@ -35,6 +37,7 @@ test = [
     "pytest-asyncio>=1.0.0,<2",
     "pytest-socket<1.0.0,>=0.7.0",
     "langchain-tests>=0.3.17",
+    "simsimd>=5.9.11",
 ]
 codespell = ["codespell<3.0.0,>=2.2.0"]
 test_integration = []

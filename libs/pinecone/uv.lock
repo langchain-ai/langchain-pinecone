@@ -811,6 +811,10 @@ dependencies = [
     { name = "numpy", version = "2.3.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pinecone", extra = ["asyncio"] },
     { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+speedups = [
     { name = "simsimd" },
 ]
 
@@ -835,6 +839,7 @@ test = [
     { name = "pytest-mock" },
     { name = "pytest-socket" },
     { name = "pytest-watcher" },
+    { name = "simsimd" },
     { name = "syrupy" },
 ]
 typing = [
@@ -849,8 +854,9 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26.4,!=2.0.2" },
     { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
     { name = "pydantic", specifier = ">=2.11.1" },
-    { name = "simsimd", specifier = ">=5.9.11" },
+    { name = "simsimd", marker = "extra == 'speedups'", specifier = ">=5.9.11" },
 ]
+provides-extras = ["speedups"]
 
 [package.metadata.requires-dev]
 codespell = [{ name = "codespell", specifier = ">=2.2.0,<3.0.0" }]
@@ -869,6 +875,7 @@ test = [
     { name = "pytest-mock", specifier = ">=3.10.0,<4.0.0" },
     { name = "pytest-socket", specifier = ">=0.7.0,<1.0.0" },
     { name = "pytest-watcher", specifier = ">=0.3.4,<1.0.0" },
+    { name = "simsimd", specifier = ">=5.9.11" },
     { name = "syrupy", specifier = ">=5.0.0,<6" },
 ]
 test-integration = []
