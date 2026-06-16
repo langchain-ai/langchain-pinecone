@@ -1131,3 +1131,123 @@ def test_delete_requires_an_argument(
     )
     with pytest.raises(ValueError, match="ids, delete_all, or filter"):
         vectorstore.delete()
+
+
+# --- FIX-003: Namespace fallback regression tests (issue #63) ---
+# Regression introduced in v0.2.11 (PR #60): kwargs.get("namespace", self._namespace)
+# did not fall back when namespace=None was explicitly passed through the call chain.
+# Fixed in PR #83 by splitting to kwargs.get("namespace") + if-None check.
+
+
+def test_similarity_search_with_score__honors_constructor_namespace(
+    mocker: MockerFixture,
+    mock_embedding: AsyncMockType,
+    mock_index: MockType,
+) -> None:
+    """similarity_search_with_score with no query-time namespace uses constructor namespace."""
+    mock_embedding.embed_query = mocker.Mock(return_value=[0.1, 0.2, 0.3])
+    mock_index.query = mocker.Mock(return_value={"matches": []})
+    vectorstore = PineconeVectorStore(
+        index=mock_index,
+        embedding=mock_embedding,
+        text_key="text",
+        namespace="constructor-ns",
+    )
+
+    vectorstore.similarity_search_with_score("test query")
+
+    assert mock_index.query.call_args.kwargs["namespace"] == "constructor-ns"
+
+
+@pytest.mark.asyncio
+async def test_asimilarity_search_with_score__honors_constructor_namespace(
+    mocker: MockerFixture,
+    mock_embedding: AsyncMockType,
+    mock_async_index: AsyncMockType,
+) -> None:
+    """asimilarity_search_with_score with no query-time namespace uses constructor namespace."""
+    mock_embedding.aembed_query = mocker.AsyncMock(return_value=[0.1, 0.2, 0.3])
+    mock_async_index.query = mocker.AsyncMock(return_value={"matches": []})
+    vectorstore = PineconeVectorStore(
+        index=mock_async_index,
+        embedding=mock_embedding,
+        text_key="text",
+        namespace="constructor-ns",
+    )
+
+    await vectorstore.asimilarity_search_with_score("test query")
+
+    assert mock_async_index.query.call_args.kwargs["namespace"] == "constructor-ns"
+
+
+def test_similarity_search__honors_constructor_namespace(
+    mocker: MockerFixture,
+    mock_embedding: AsyncMockType,
+    mock_index: MockType,
+) -> None:
+    """similarity_search with no query-time namespace uses constructor namespace.
+
+    This is the exact bug scenario: as_retriever(search_type="similarity") passes
+    namespace=None through the call chain, which must fall back to self._namespace.
+    """
+    mock_embedding.embed_query = mocker.Mock(return_value=[0.1, 0.2, 0.3])
+    mock_index.query = mocker.Mock(return_value={"matches": []})
+    vectorstore = PineconeVectorStore(
+        index=mock_index,
+        embedding=mock_embedding,
+        text_key="text",
+        namespace="constructor-ns",
+    )
+
+    vectorstore.similarity_search("test query")
+
+    assert mock_index.query.call_args.kwargs["namespace"] == "constructor-ns"
+
+
+@pytest.mark.asyncio
+async def test_asimilarity_search__honors_constructor_namespace(
+    mocker: MockerFixture,
+    mock_embedding: AsyncMockType,
+    mock_async_index: AsyncMockType,
+) -> None:
+    """asimilarity_search with no query-time namespace uses constructor namespace."""
+    mock_embedding.aembed_query = mocker.AsyncMock(return_value=[0.1, 0.2, 0.3])
+    mock_async_index.query = mocker.AsyncMock(return_value={"matches": []})
+    vectorstore = PineconeVectorStore(
+        index=mock_async_index,
+        embedding=mock_embedding,
+        text_key="text",
+        namespace="constructor-ns",
+    )
+
+    await vectorstore.asimilarity_search("test query")
+
+    assert mock_async_index.query.call_args.kwargs["namespace"] == "constructor-ns"
+
+
+def test_similarity_score_threshold_retriever__honors_constructor_namespace(
+    mocker: MockerFixture,
+    mock_embedding: AsyncMockType,
+    mock_index: MockType,
+) -> None:
+    """as_retriever(similarity_score_threshold) with no query-time namespace uses constructor namespace.
+
+    The threshold retriever calls similarity_search_with_score internally;
+    verifies the namespace fallback survives the full retriever → vectorstore chain.
+    """
+    mock_embedding.embed_query = mocker.Mock(return_value=[0.1, 0.2, 0.3])
+    mock_index.query = mocker.Mock(return_value={"matches": []})
+    vectorstore = PineconeVectorStore(
+        index=mock_index,
+        embedding=mock_embedding,
+        text_key="text",
+        namespace="constructor-ns",
+    )
+
+    retriever = vectorstore.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={"score_threshold": 0.5, "k": 5},
+    )
+    retriever.invoke("test query")
+
+    assert mock_index.query.call_args.kwargs["namespace"] == "constructor-ns"
