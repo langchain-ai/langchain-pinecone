@@ -17,11 +17,16 @@ from pinecone import (
 
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
-from tests.integration_tests.test_vectorstores import DEFAULT_SLEEP
+from tests.integration_tests.test_vectorstores import (
+    DEFAULT_SLEEP,
+    _poll_for_results,
+    _sweep_stale_langchain_test_indexes,
+)
 
 DIMENSION = 1024
 # unique name of the index for this test run
 INDEX_NAME = f"langchain-test-embeddings-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+_EMBEDDINGS_PREFIX = "langchain-test-embeddings-"
 MODEL = "multilingual-e5-large"
 SPARSE_MODEL_NAME = "pinecone-sparse-english-v0"
 NAMESPACE_NAME = "test_namespace"
@@ -138,6 +143,7 @@ async def test_aembed_documents(embd_client: PineconeEmbeddings) -> None:
 def test_vector_store(embd_client: PineconeEmbeddings) -> None:
     # setup index if it doesn't exist
     pc = Pinecone()
+    _sweep_stale_langchain_test_indexes(pc, _EMBEDDINGS_PREFIX)
     if pc.has_index(name=INDEX_NAME):  # change to list comprehension
         pc.delete_index(INDEX_NAME)
         time.sleep(DEFAULT_SLEEP)  # prevent race with subsequent creation
@@ -158,8 +164,10 @@ def test_vector_store(embd_client: PineconeEmbeddings) -> None:
         [Document("Hello, world!"), Document("This is a test.")],
         namespace=NAMESPACE_NAME,
     )
-    time.sleep(DEFAULT_SLEEP)  # Increase wait time to ensure indexing is complete
-    resp = vectorstore.similarity_search(query="hello", namespace=NAMESPACE_NAME)
+    resp = _poll_for_results(
+        lambda: vectorstore.similarity_search(query="hello", namespace=NAMESPACE_NAME),
+        min_count=2,
+    )
     assert len(resp) == 2
     # delete index
     pc.delete_index(INDEX_NAME)

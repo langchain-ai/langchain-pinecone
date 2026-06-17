@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from datetime import datetime
-from typing import List
+from typing import Any, Awaitable, Callable, List
 
 import numpy as np
 import pinecone  # type: ignore
@@ -26,6 +26,108 @@ DIMENSION = 1024  # dimension of the `multilingual-e5-large` embeddings
 
 DEFAULT_SLEEP = 15
 
+_FRESHNESS_MAX_WAIT: float = 60.0
+_FRESHNESS_INTERVAL: float = 2.0
+
+# Name prefix for indexes this suite creates.  The suffix is a YYYYMMDDHHMMSS timestamp
+# so stale indexes from cancelled CI runs can be identified and swept by age.
+_VECTORSTORE_PREFIX = "langchain-test-vectorstores-"
+
+
+def _sweep_stale_langchain_test_indexes(
+    client: "pinecone.Pinecone",
+    prefix: str,
+    age_threshold_s: int = 7200,
+) -> None:
+    """Delete own stale test indexes leaked by cancelled CI runs.
+
+    Matches only names of the form ``<prefix>YYYYMMDDHHMMSS``.  Indexes younger than
+    ``age_threshold_s`` seconds (default 2 h) are left alone so parallel CI jobs are
+    not disturbed.  Never touches names that do not match (e.g. ``idx-*`` from other
+    suites).  All errors are swallowed so this sweep never blocks ``setup_class``.
+    """
+    try:
+        now = datetime.utcnow()
+        for idx in client.list_indexes():
+            name: str = idx.name
+            if not name.startswith(prefix):
+                continue
+            ts_str = name[len(prefix) :]
+            try:
+                created = datetime.strptime(ts_str, "%Y%m%d%H%M%S")
+            except ValueError:
+                continue
+            if (now - created).total_seconds() > age_threshold_s:
+                try:
+                    client.delete_index(name)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def _poll_for_results(
+    fn: Callable[[], List[Any]],
+    *,
+    min_count: int = 1,
+    max_wait: float = _FRESHNESS_MAX_WAIT,
+    interval: float = _FRESHNESS_INTERVAL,
+) -> List[Any]:
+    """Poll fn() until it returns at least min_count items, or timeout.
+
+    Wraps post-upsert reads that race eventual consistency.  The caller still
+    asserts on the returned list so a genuinely wrong result fails the test.
+    """
+    deadline = time.monotonic() + max_wait
+    result: List[Any] = []
+    while time.monotonic() < deadline:
+        result = fn()
+        if len(result) >= min_count:
+            return result
+        time.sleep(interval)
+    return result
+
+
+async def _apoll_for_results(
+    fn: Callable[[], Awaitable[List[Any]]],
+    *,
+    min_count: int = 1,
+    max_wait: float = _FRESHNESS_MAX_WAIT,
+    interval: float = _FRESHNESS_INTERVAL,
+) -> List[Any]:
+    """Async variant of _poll_for_results."""
+    deadline = time.monotonic() + max_wait
+    result: List[Any] = []
+    while time.monotonic() < deadline:
+        result = await fn()
+        if len(result) >= min_count:
+            return result
+        await asyncio.sleep(interval)
+    return result
+
+
+def _poll_for_vector_count(
+    index: Any,
+    namespace: str,
+    expected_count: int,
+    *,
+    max_wait: float = _FRESHNESS_MAX_WAIT,
+    interval: float = _FRESHNESS_INTERVAL,
+) -> Any:
+    """Poll describe_index_stats until namespace has at least expected_count vectors.
+
+    Returns the last seen stats dict for the caller to assert on.
+    """
+    deadline = time.monotonic() + max_wait
+    stats: Any = {}
+    while time.monotonic() < deadline:
+        stats = index.describe_index_stats()
+        count = stats.get("namespaces", {}).get(namespace, {}).get("vector_count", 0)
+        if count >= expected_count:
+            return stats
+        time.sleep(interval)
+    return stats
+
 
 class TestPinecone:
     index: "pinecone.Index"
@@ -37,6 +139,7 @@ class TestPinecone:
 
         client = pinecone.Pinecone()
         print(f"client: {client}")  # noqa: T201
+        _sweep_stale_langchain_test_indexes(client, _VECTORSTORE_PREFIX)
         if client.has_index(name=INDEX_NAME):  # change to list comprehension
             client.delete_index(INDEX_NAME)
             time.sleep(DEFAULT_SLEEP)  # prevent race with subsequent creation
@@ -50,7 +153,10 @@ class TestPinecone:
         # Without this the first test races the index becoming queryable and its
         # similarity_search comes back empty (the OpenAI embedding round-trip used
         # to mask this by adding latency here).
+        _ready_deadline = time.monotonic() + 300
         while not client.describe_index(INDEX_NAME).status["ready"]:
+            if time.monotonic() > _ready_deadline:
+                raise TimeoutError(f"Index {INDEX_NAME} not ready after 300 s")
             time.sleep(1)
 
         self.index = client.Index(INDEX_NAME)
@@ -114,8 +220,11 @@ class TestPinecone:
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
         )
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
-        output = docsearch.similarity_search(unique_id, k=1, namespace=NAMESPACE_NAME)
+        output = _poll_for_results(
+            lambda: docsearch.similarity_search(
+                unique_id, k=1, namespace=NAMESPACE_NAME
+            ),
+        )
         output[0].id = None  # overwrite ID for ease of comparison
         assert output == [Document(page_content=needs)]
 
@@ -134,11 +243,12 @@ class TestPinecone:
             index_name=INDEX_NAME,
             namespace=f"{NAMESPACE_NAME}-afrom-texts",
         )
-        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
-        output = await docsearch.asimilarity_search(
-            needs,
-            k=1,
-            namespace=f"{NAMESPACE_NAME}-afrom-texts",
+        output = await _apoll_for_results(
+            lambda: docsearch.asimilarity_search(
+                needs,
+                k=1,
+                namespace=f"{NAMESPACE_NAME}-afrom-texts",
+            ),
         )
         print(f"output: {output}")  # noqa: T201
         output[0].id = None  # overwrite ID for ease of comparison
@@ -163,8 +273,9 @@ class TestPinecone:
             metadatas=metadatas,
             namespace=namespace,
         )
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
-        output = docsearch.similarity_search(needs, k=1, namespace=namespace)
+        output = _poll_for_results(
+            lambda: docsearch.similarity_search(needs, k=1, namespace=namespace),
+        )
 
         output[0].id = None
         # TODO: why metadata={"page": 0.0}) instead of {"page": 0}?
@@ -190,8 +301,9 @@ class TestPinecone:
             metadatas=metadatas,
             namespace=namespace,
         )
-        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
-        output = await docsearch.asimilarity_search(needs, k=1, namespace=namespace)
+        output = await _apoll_for_results(
+            lambda: docsearch.asimilarity_search(needs, k=1, namespace=namespace),
+        )
 
         output[0].id = None
         # TODO: why metadata={"page": 0.0}) instead of {"page": 0}?
@@ -223,9 +335,10 @@ class TestPinecone:
 
         # Search with namespace
         await docsearch.aadd_documents(documents=docs, namespace=f"{INDEX_NAME}-2")
-        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
-        output = await docsearch.asimilarity_search(
-            docs[0].page_content, k=1, namespace=f"{INDEX_NAME}-2"
+        output = await _apoll_for_results(
+            lambda: docsearch.asimilarity_search(
+                docs[0].page_content, k=1, namespace=f"{INDEX_NAME}-2"
+            ),
         )
         # we expect this to return the document object with text "foo2"
         # however, it will include a modified Document object with a new ID
@@ -262,9 +375,11 @@ class TestPinecone:
             metadatas=metadatas,
             namespace=NAMESPACE_NAME,
         )
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
-        output = docsearch.similarity_search_with_score(
-            "foo", k=3, namespace=NAMESPACE_NAME
+        output = _poll_for_results(
+            lambda: docsearch.similarity_search_with_score(
+                "foo", k=3, namespace=NAMESPACE_NAME
+            ),
+            min_count=3,
         )
         print(f"output: {output}")  # noqa: T201
         sorted_docs_and_scores = sorted(output, key=lambda x: x[0].metadata["page"])
@@ -297,9 +412,11 @@ class TestPinecone:
             namespace=NAMESPACE_NAME,
         )
         print(texts)  # noqa: T201
-        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
-        output = await docsearch.asimilarity_search_with_score(
-            "foo", k=3, namespace=NAMESPACE_NAME
+        output = await _apoll_for_results(
+            lambda: docsearch.asimilarity_search_with_score(
+                "foo", k=3, namespace=NAMESPACE_NAME
+            ),
+            min_count=3,
         )
         print(f"output: {output}")  # noqa: T201
         sorted_docs_and_scores = sorted(output, key=lambda x: x[0].metadata["page"])
@@ -344,15 +461,18 @@ class TestPinecone:
             namespace=f"{INDEX_NAME}-2",
         )
 
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
-
         # Search with namespace
         docsearch = PineconeVectorStore.from_existing_index(
             index_name=INDEX_NAME,
             embedding=embeddings,
             namespace=f"{INDEX_NAME}-1",
         )
-        output = docsearch.similarity_search("foo", k=20, namespace=f"{INDEX_NAME}-1")
+        output = _poll_for_results(
+            lambda: docsearch.similarity_search(
+                "foo", k=20, namespace=f"{INDEX_NAME}-1"
+            ),
+            min_count=1,
+        )
         # check that we don't get results from the other namespace
         page_contents = sorted(set([o.page_content for o in output]))
         assert all(content in ["foo", "bar", "baz"] for content in page_contents)
@@ -369,8 +489,7 @@ class TestPinecone:
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
         )
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
-        index_stats = self.index.describe_index_stats()
+        index_stats = _poll_for_vector_count(self.index, NAMESPACE_NAME, len(texts))
         assert index_stats["namespaces"][NAMESPACE_NAME]["vector_count"] == len(texts)
 
         ids_1 = [uuid.uuid4().hex for _ in range(len(texts))]
@@ -381,8 +500,7 @@ class TestPinecone:
             index_name=INDEX_NAME,
             namespace=NAMESPACE_NAME,
         )
-        time.sleep(DEFAULT_SLEEP)  # prevent race condition
-        index_stats = self.index.describe_index_stats()
+        index_stats = _poll_for_vector_count(self.index, NAMESPACE_NAME, len(texts) * 2)
         assert (
             index_stats["namespaces"][NAMESPACE_NAME]["vector_count"] == len(texts) * 2
         )
@@ -401,8 +519,10 @@ class TestPinecone:
             metadatas=metadatas,
         )
         # wait for the index to be ready
-        time.sleep(DEFAULT_SLEEP)
-        output = docsearch.similarity_search_with_relevance_scores("foo", k=3)
+        output = _poll_for_results(
+            lambda: docsearch.similarity_search_with_relevance_scores("foo", k=3),
+            min_count=3,
+        )
         print(output)  # noqa: T201
         assert all(
             (1 >= score or np.isclose(score, 1)) and score >= 0 for _, score in output
@@ -421,8 +541,10 @@ class TestPinecone:
             metadatas=metadatas,
         )
         # wait for the index to be ready
-        await asyncio.sleep(DEFAULT_SLEEP)  # prevent race condition
-        output = await docsearch.asimilarity_search_with_relevance_scores("foo", k=3)
+        output = await _apoll_for_results(
+            lambda: docsearch.asimilarity_search_with_relevance_scores("foo", k=3),
+            min_count=3,
+        )
         print(output)  # noqa: T201
         assert all(
             (1 >= score or np.isclose(score, 1)) and score >= 0 for _, score in output
