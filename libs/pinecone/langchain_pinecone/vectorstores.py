@@ -973,7 +973,9 @@ class PineconeVectorStore(VectorStore):
             )
             ```
         """
-        pinecone_index = cls.get_pinecone_index(index_name, pool_threads)
+        pinecone_index = cls.get_pinecone_index(
+            index_name, pool_threads, pinecone_api_key=kwargs.get("pinecone_api_key")
+        )
         pinecone = cls(pinecone_index, embedding, text_key, namespace, **kwargs)
 
         pinecone.add_texts(

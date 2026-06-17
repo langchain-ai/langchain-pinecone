@@ -1225,6 +1225,45 @@ async def test_asimilarity_search__honors_constructor_namespace(
     assert mock_async_index.query.call_args.kwargs["namespace"] == "constructor-ns"
 
 
+# --- FIX-002: from_texts forwards pinecone_api_key to get_pinecone_index (issue #110) ---
+
+
+def test_from_texts_forwards_pinecone_api_key(
+    mocker: MockerFixture, mock_index: MockType, mock_embedding: AsyncMockType
+) -> None:
+    """from_texts passes the pinecone_api_key kwarg through to get_pinecone_index."""
+    mock_get_index = mocker.patch.object(
+        PineconeVectorStore, "get_pinecone_index", return_value=mock_index
+    )
+    mock_embedding.embed_documents = mocker.Mock(return_value=[[0.1, 0.2, 0.3]])
+
+    PineconeVectorStore.from_texts(
+        ["text"],
+        mock_embedding,
+        index_name="my-index",
+        pinecone_api_key="caller-supplied-key",
+        async_req=False,
+    )
+
+    mock_get_index.assert_called_once_with(
+        "my-index", 4, pinecone_api_key="caller-supplied-key"
+    )
+
+
+def test_from_texts_raises_when_no_api_key(
+    mocker: MockerFixture, mock_embedding: AsyncMockType
+) -> None:
+    """from_texts raises ValueError when neither pinecone_api_key kwarg nor env var is set."""
+    mocker.patch.dict("os.environ", {"PINECONE_API_KEY": ""})
+
+    with pytest.raises(ValueError, match="Pinecone API key"):
+        PineconeVectorStore.from_texts(
+            ["text"],
+            mock_embedding,
+            index_name="my-index",
+        )
+
+
 def test_similarity_score_threshold_retriever__honors_constructor_namespace(
     mocker: MockerFixture,
     mock_embedding: AsyncMockType,
