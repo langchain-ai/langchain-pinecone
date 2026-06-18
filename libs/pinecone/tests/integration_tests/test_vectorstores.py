@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Awaitable, Callable, List
+from typing import Any, Awaitable, Callable, Generator, List
 
 import numpy as np
 import pinecone  # type: ignore
@@ -14,6 +14,10 @@ from pinecone import AwsRegion, CloudProvider, Metric, ServerlessSpec
 from pytest_mock import MockerFixture  # type: ignore[import-not-found]
 
 from langchain_pinecone import PineconeEmbeddings, PineconeVectorStore
+
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("PINECONE_API_KEY"), reason="Pinecone API key not set"
+)
 
 # unique name of the index for this test run
 INDEX_NAME = f"langchain-test-vectorstores-{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -124,6 +128,30 @@ def _poll_for_vector_count(
         stats = index.describe_index_stats()
         count = stats.get("namespaces", {}).get(namespace, {}).get("vector_count", 0)
         if count >= expected_count:
+            return stats
+        time.sleep(interval)
+    return stats
+
+
+def _poll_for_vector_count_at_most(
+    index: Any,
+    namespace: str,
+    max_count: int,
+    *,
+    max_wait: float = _FRESHNESS_MAX_WAIT,
+    interval: float = _FRESHNESS_INTERVAL,
+) -> Any:
+    """Poll describe_index_stats until namespace has at most max_count vectors.
+
+    Used to assert post-delete eventual consistency. Returns the last seen stats
+    dict for the caller to assert on.
+    """
+    deadline = time.monotonic() + max_wait
+    stats: Any = {}
+    while time.monotonic() < deadline:
+        stats = index.describe_index_stats()
+        count = stats.get("namespaces", {}).get(namespace, {}).get("vector_count", 0)
+        if count <= max_count:
             return stats
         time.sleep(interval)
     return stats
@@ -640,3 +668,104 @@ class TestPinecone:
             namespace=NAMESPACE_NAME,
             async_req=False,  # force single-threaded path
         )
+
+    # ------------------------------------------------------------------
+    # delete() / adelete() integration tests (TC-011)
+    # ------------------------------------------------------------------
+
+    @pytest.fixture
+    def _delete_ns(self) -> Generator[str, None, None]:
+        """Yield a unique namespace and delete_all it on teardown."""
+        ns = f"del-{uuid.uuid4().hex[:8]}"
+        yield ns
+        try:
+            self.index.delete(delete_all=True, namespace=ns)
+        except Exception:
+            pass
+
+    def test_delete_by_ids(
+        self, embeddings: PineconeEmbeddings, _delete_ns: str
+    ) -> None:
+        """delete(ids=...) removes only the specified vectors; remaining count asserted."""
+        ns = _delete_ns
+        texts = ["alpha", "beta", "gamma", "delta"]
+        doc_ids = [uuid.uuid4().hex for _ in texts]
+        docsearch = PineconeVectorStore.from_texts(
+            texts=texts,
+            ids=doc_ids,
+            embedding=embeddings,
+            index_name=INDEX_NAME,
+            namespace=ns,
+        )
+        _poll_for_vector_count(self.index, ns, len(texts))
+
+        ids_to_delete = doc_ids[:2]
+        docsearch.delete(ids=ids_to_delete, namespace=ns)
+
+        stats = _poll_for_vector_count_at_most(
+            self.index, ns, len(texts) - len(ids_to_delete)
+        )
+        remaining = stats.get("namespaces", {}).get(ns, {}).get("vector_count", 0)
+        assert remaining == len(texts) - len(ids_to_delete)
+
+    def test_delete_by_filter(
+        self, embeddings: PineconeEmbeddings, _delete_ns: str
+    ) -> None:
+        """delete(filter=...) removes only vectors matching the metadata predicate."""
+        ns = _delete_ns
+        texts = ["alpha", "beta", "gamma", "delta"]
+        metadatas = [{"page": i} for i in range(len(texts))]
+        docsearch = PineconeVectorStore.from_texts(
+            texts=texts,
+            embedding=embeddings,
+            metadatas=metadatas,
+            index_name=INDEX_NAME,
+            namespace=ns,
+        )
+        _poll_for_vector_count(self.index, ns, len(texts))
+
+        docsearch.delete(filter={"page": 0}, namespace=ns)
+
+        expected_remaining = len(texts) - 1
+        stats = _poll_for_vector_count_at_most(self.index, ns, expected_remaining)
+        remaining = stats.get("namespaces", {}).get(ns, {}).get("vector_count", 0)
+        assert remaining == expected_remaining
+
+    def test_delete_all(self, embeddings: PineconeEmbeddings, _delete_ns: str) -> None:
+        """delete(delete_all=True) empties the entire namespace."""
+        ns = _delete_ns
+        texts = ["alpha", "beta", "gamma"]
+        docsearch = PineconeVectorStore.from_texts(
+            texts=texts,
+            embedding=embeddings,
+            index_name=INDEX_NAME,
+            namespace=ns,
+        )
+        _poll_for_vector_count(self.index, ns, len(texts))
+
+        docsearch.delete(delete_all=True, namespace=ns)
+
+        stats = _poll_for_vector_count_at_most(self.index, ns, 0)
+        remaining = stats.get("namespaces", {}).get(ns, {}).get("vector_count", 0)
+        assert remaining == 0
+
+    @pytest.mark.asyncio
+    async def test_adelete_delete_all(
+        self, embeddings: PineconeEmbeddings, _delete_ns: str
+    ) -> None:
+        """adelete(delete_all=True) empties the namespace asynchronously."""
+        ns = _delete_ns
+        texts = ["alpha", "beta", "gamma"]
+        docsearch = await PineconeVectorStore.afrom_texts(
+            texts=texts,
+            embedding=embeddings,
+            index_name=INDEX_NAME,
+            namespace=ns,
+        )
+        _poll_for_vector_count(self.index, ns, len(texts))
+
+        await docsearch.adelete(delete_all=True, namespace=ns)
+
+        stats = _poll_for_vector_count_at_most(self.index, ns, 0)
+        remaining = stats.get("namespaces", {}).get(ns, {}).get("vector_count", 0)
+        assert remaining == 0
