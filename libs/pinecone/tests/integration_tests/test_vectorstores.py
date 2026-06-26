@@ -769,3 +769,91 @@ class TestPinecone:
         stats = _poll_for_vector_count_at_most(self.index, ns, 0)
         remaining = stats.get("namespaces", {}).get(ns, {}).get("vector_count", 0)
         assert remaining == 0
+
+    def test_max_marginal_relevance_search(
+        self, embeddings: PineconeEmbeddings
+    ) -> None:
+        """Dense MMR returns k distinct documents drawn from the corpus."""
+        unique_id = uuid.uuid4().hex[:8]
+        ns = f"mmr-dense-{unique_id}"
+        corpus = ["alpha one", "beta two", "gamma three", "delta four"]
+        docsearch = PineconeVectorStore.from_texts(
+            corpus, embeddings, index_name=INDEX_NAME, namespace=ns
+        )
+        results = _poll_for_results(
+            lambda: docsearch.max_marginal_relevance_search(
+                "alpha", k=2, fetch_k=4, namespace=ns
+            ),
+            min_count=2,
+        )
+        assert len(results) == 2
+        texts_returned = [doc.page_content for doc in results]
+        assert all(t in corpus for t in texts_returned)
+        assert len(set(texts_returned)) == 2
+
+    def test_max_marginal_relevance_search_by_vector(
+        self, embeddings: PineconeEmbeddings
+    ) -> None:
+        """Dense MMR by vector returns k distinct documents drawn from the corpus."""
+        unique_id = uuid.uuid4().hex[:8]
+        ns = f"mmr-dense-bv-{unique_id}"
+        corpus = ["alpha one", "beta two", "gamma three", "delta four"]
+        docsearch = PineconeVectorStore.from_texts(
+            corpus, embeddings, index_name=INDEX_NAME, namespace=ns
+        )
+        query_embedding = embeddings.embed_query("alpha")
+        results = _poll_for_results(
+            lambda: docsearch.max_marginal_relevance_search_by_vector(
+                query_embedding, k=2, fetch_k=4, namespace=ns
+            ),
+            min_count=2,
+        )
+        assert len(results) == 2
+        texts_returned = [doc.page_content for doc in results]
+        assert all(t in corpus for t in texts_returned)
+        assert len(set(texts_returned)) == 2
+
+    @pytest.mark.asyncio
+    async def test_amax_marginal_relevance_search(
+        self, embeddings: PineconeEmbeddings
+    ) -> None:
+        """Async dense MMR returns k distinct documents drawn from the corpus."""
+        unique_id = uuid.uuid4().hex[:8]
+        ns = f"mmr-dense-async-{unique_id}"
+        corpus = ["alpha one", "beta two", "gamma three", "delta four"]
+        docsearch = await PineconeVectorStore.afrom_texts(
+            corpus, embeddings, index_name=INDEX_NAME, namespace=ns
+        )
+        results = await _apoll_for_results(
+            lambda: docsearch.amax_marginal_relevance_search(
+                "alpha", k=2, fetch_k=4, namespace=ns
+            ),
+            min_count=2,
+        )
+        assert len(results) == 2
+        texts_returned = [doc.page_content for doc in results]
+        assert all(t in corpus for t in texts_returned)
+        assert len(set(texts_returned)) == 2
+
+    @pytest.mark.asyncio
+    async def test_amax_marginal_relevance_search_by_vector(
+        self, embeddings: PineconeEmbeddings
+    ) -> None:
+        """Async dense MMR by vector returns k distinct documents drawn from the corpus."""
+        unique_id = uuid.uuid4().hex[:8]
+        ns = f"mmr-dense-bv-async-{unique_id}"
+        corpus = ["alpha one", "beta two", "gamma three", "delta four"]
+        docsearch = await PineconeVectorStore.afrom_texts(
+            corpus, embeddings, index_name=INDEX_NAME, namespace=ns
+        )
+        query_embedding = await embeddings.aembed_query("alpha")
+        results = await _apoll_for_results(
+            lambda: docsearch.amax_marginal_relevance_search_by_vector(
+                query_embedding, k=2, fetch_k=4, namespace=ns
+            ),
+            min_count=2,
+        )
+        assert len(results) == 2
+        texts_returned = [doc.page_content for doc in results]
+        assert all(t in corpus for t in texts_returned)
+        assert len(set(texts_returned)) == 2
