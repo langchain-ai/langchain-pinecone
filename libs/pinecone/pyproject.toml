@@ -45,6 +45,7 @@ lint = ["ruff<1.0,>=0.5"]
 dev = [
     "ipykernel>=6.29.5",
     "langchain-core",
+    "marimo>=0.9,<1.0",
     "pip>=25.0.1",
 ]
 typing = ["mypy<2.0,>=1.10", "simsimd<6.0.0,>=5.0.0"]
@@ -52,10 +53,11 @@ typing = ["mypy<2.0,>=1.10", "simsimd<6.0.0,>=5.0.0"]
 [tool.mypy]
 disallow_untyped_defs = true
 ignore_missing_imports = true
+exclude = ["examples/"]
 
 [tool.ruff]
 target-version = "py313"
-exclude = ["notebooks/*"]
+exclude = ["notebooks/*", "examples/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "T201", "NPY201"]
