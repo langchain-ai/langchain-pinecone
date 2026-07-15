@@ -769,3 +769,113 @@ class TestPinecone:
         stats = _poll_for_vector_count_at_most(self.index, ns, 0)
         remaining = stats.get("namespaces", {}).get(ns, {}).get("vector_count", 0)
         assert remaining == 0
+
+    # ------------------------------------------------------------------
+    # similarity_search_by_vector / asimilarity_search_by_vector (TC-012)
+    # ------------------------------------------------------------------
+
+    @pytest.fixture
+    def _bv_ns(self) -> Generator[str, None, None]:
+        """Yield a unique namespace and delete_all it on teardown."""
+        ns = f"bv-{uuid.uuid4().hex[:8]}"
+        yield ns
+        try:
+            self.index.delete(delete_all=True, namespace=ns)
+        except Exception:
+            pass
+
+    def test_similarity_search_by_vector(
+        self, embeddings: PineconeEmbeddings, _bv_ns: str
+    ) -> None:
+        """similarity_search_by_vector returns the top match for a precomputed vector."""
+        ns = _bv_ns
+        unique_id = uuid.uuid4().hex
+        sentinel = f"unique sentinel document {unique_id}"
+        texts = [sentinel, "unrelated alpha", "unrelated beta"]
+        docsearch = PineconeVectorStore.from_texts(
+            texts=texts,
+            embedding=embeddings,
+            index_name=INDEX_NAME,
+            namespace=ns,
+        )
+        vec = embeddings.embed_query(sentinel)
+        output = _poll_for_results(
+            lambda: docsearch.similarity_search_by_vector(vec, k=1, namespace=ns),
+        )
+        assert len(output) == 1
+        assert output[0].page_content == sentinel
+
+    def test_similarity_search_by_vector_with_score(
+        self, embeddings: PineconeEmbeddings, _bv_ns: str
+    ) -> None:
+        """similarity_search_by_vector_with_score returns scores; sentinel scores highest."""
+        ns = _bv_ns
+        unique_id = uuid.uuid4().hex
+        sentinel = f"unique sentinel document {unique_id}"
+        texts = [sentinel, "unrelated alpha", "unrelated beta"]
+        docsearch = PineconeVectorStore.from_texts(
+            texts=texts,
+            embedding=embeddings,
+            index_name=INDEX_NAME,
+            namespace=ns,
+        )
+        vec = embeddings.embed_query(sentinel)
+        output = _poll_for_results(
+            lambda: docsearch.similarity_search_by_vector_with_score(
+                vec, k=3, namespace=ns
+            ),
+            min_count=3,
+        )
+        assert len(output) == 3
+        docs_and_scores = sorted(output, key=lambda x: x[1], reverse=True)
+        assert docs_and_scores[0][0].page_content == sentinel
+        assert docs_and_scores[0][1] > docs_and_scores[1][1]
+
+    @pytest.mark.asyncio
+    async def test_asimilarity_search_by_vector(
+        self, embeddings: PineconeEmbeddings, _bv_ns: str
+    ) -> None:
+        """asimilarity_search_by_vector returns the top match for a precomputed vector."""
+        ns = _bv_ns
+        unique_id = uuid.uuid4().hex
+        sentinel = f"unique sentinel document {unique_id}"
+        texts = [sentinel, "unrelated alpha", "unrelated beta"]
+        docsearch = await PineconeVectorStore.afrom_texts(
+            texts=texts,
+            embedding=embeddings,
+            index_name=INDEX_NAME,
+            namespace=ns,
+        )
+        vec = embeddings.embed_query(sentinel)
+        output = await _apoll_for_results(
+            lambda: docsearch.asimilarity_search_by_vector(vec, k=1, namespace=ns),
+        )
+        assert len(output) == 1
+        assert output[0].page_content == sentinel
+
+    @pytest.mark.asyncio
+    async def test_asimilarity_search_by_vector_with_score(
+        self, embeddings: PineconeEmbeddings, _bv_ns: str
+    ) -> None:
+        """asimilarity_search_by_vector_with_score returns scores; sentinel scores highest."""
+        ns = _bv_ns
+        unique_id = uuid.uuid4().hex
+        sentinel = f"unique sentinel document {unique_id}"
+        texts = [sentinel, "unrelated alpha", "unrelated beta"]
+        docsearch = await PineconeVectorStore.afrom_texts(
+            texts=texts,
+            embedding=embeddings,
+            index_name=INDEX_NAME,
+            namespace=ns,
+        )
+        vec = embeddings.embed_query(sentinel)
+        output = await _apoll_for_results(
+            lambda: docsearch.asimilarity_search_by_vector_with_score(
+                vec, k=3, namespace=ns
+            ),
+            min_count=3,
+        )
+        assert len(output) == 3
+        docs_and_scores = sorted(output, key=lambda x: x[1], reverse=True)
+        assert docs_and_scores[0][0].page_content == sentinel
+        assert docs_and_scores[0][1] > docs_and_scores[1][1]
