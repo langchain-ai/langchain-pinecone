@@ -883,7 +883,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "langchain-core", specifier = ">=1.2.11,<2.0.0" },
     { name = "numpy", specifier = ">=1.26.4,!=2.0.2" },
-    { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0,<8.0.0" },
+    { name = "pinecone", extras = ["asyncio"], specifier = ">=6.0.0" },
     { name = "pydantic", specifier = ">=2.11.1" },
     { name = "simsimd", marker = "extra == 'speedups'", specifier = ">=5.9.11" },
 ]
