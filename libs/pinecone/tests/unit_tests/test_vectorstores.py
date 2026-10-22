@@ -1076,11 +1076,22 @@ def test_select_relevance_score_fn_raises_for_unknown_strategy(
         vectorstore._select_relevance_score_fn()
 
 
-def test_cosine_relevance_score_fn() -> None:
-    """_cosine_relevance_score_fn maps Pinecone's [-1, 1] score to [0, 1] via (score + 1) / 2."""
-    assert PineconeVectorStore._cosine_relevance_score_fn(-1.0) == pytest.approx(0.0)
-    assert PineconeVectorStore._cosine_relevance_score_fn(1.0) == pytest.approx(1.0)
-    assert PineconeVectorStore._cosine_relevance_score_fn(0.0) == pytest.approx(0.5)
+@pytest.mark.parametrize(
+    ("score", "expected"),
+    [
+        (-1.01, 0.0),
+        (-1.0, 0.0),
+        (0.0, 0.5),
+        (0.81, 0.905),
+        (1.0, 1.0),
+        (1.01, 1.0),
+    ],
+)
+def test_cosine_relevance_score_fn(score: float, expected: float) -> None:
+    """Normalize cosine scores and keep the result within [0, 1]."""
+    assert PineconeVectorStore._cosine_relevance_score_fn(score) == pytest.approx(
+        expected
+    )
 
 
 def test_sync_query_rejects_applyresult(
