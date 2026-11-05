@@ -5,7 +5,6 @@ import uuid
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Generator, List
 
-import numpy as np
 import pinecone  # type: ignore
 import pytest  # type: ignore[import-not-found]
 from langchain_core.documents import Document
@@ -535,7 +534,6 @@ class TestPinecone:
         # only focused on this namespace now
         # assert index_stats["total_vector_count"] == len(texts) * 2
 
-    @pytest.mark.xfail(reason="relevance score just over 1")
     def test_relevance_score_bound(self, embeddings: PineconeEmbeddings) -> None:
         """Ensures all relevance scores are between 0 and 1."""
         texts = ["foo", "bar", "baz"]
@@ -552,12 +550,9 @@ class TestPinecone:
             min_count=3,
         )
         print(output)  # noqa: T201
-        assert all(
-            (1 >= score or np.isclose(score, 1)) and score >= 0 for _, score in output
-        )
+        assert all(0.0 <= score <= 1.0 for _, score in output)
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="relevance score just over 1")
     async def test_arelevance_score_bound(self, embeddings: PineconeEmbeddings) -> None:
         """Ensures all relevance scores are between 0 and 1."""
         texts = ["foo", "bar", "baz"]
@@ -574,9 +569,7 @@ class TestPinecone:
             min_count=3,
         )
         print(output)  # noqa: T201
-        assert all(
-            (1 >= score or np.isclose(score, 1)) and score >= 0 for _, score in output
-        )
+        assert all(0.0 <= score <= 1.0 for _, score in output)
 
     @pytest.mark.skipif(reason="slow to run for benchmark")
     @pytest.mark.parametrize(

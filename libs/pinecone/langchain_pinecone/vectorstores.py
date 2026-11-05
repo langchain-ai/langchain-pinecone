@@ -716,8 +716,9 @@ class PineconeVectorStore(VectorStore):
 
     @staticmethod
     def _cosine_relevance_score_fn(score: float) -> float:
-        """Pinecone returns cosine similarity scores between [-1,1]"""
-        return (score + 1) / 2
+        """Normalize Pinecone cosine similarity scores to the range [0, 1]."""
+        normalized_score = (score + 1) / 2
+        return min(max(normalized_score, 0.0), 1.0)
 
     def max_marginal_relevance_search_by_vector(
         self,
