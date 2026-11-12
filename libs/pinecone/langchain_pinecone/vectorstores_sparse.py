@@ -23,11 +23,13 @@ from langchain_pinecone._utilities import (
     sparse_maximal_marginal_relevance,
 )
 from langchain_pinecone.embeddings import PineconeSparseEmbeddings
-from langchain_pinecone.vectorstores import PineconeVectorStore
+from langchain_pinecone.vectorstores import (
+    PineconeVectorStore,
+    _document_schema_write_guard,
+)
 
 if TYPE_CHECKING:
     pass
-
 logger = logging.getLogger(__name__)
 
 VST = TypeVar("VST", bound=VectorStore)
@@ -239,40 +241,40 @@ class PineconeSparseVectorStore(PineconeVectorStore):
 
         # For loops to avoid memory issues and optimize when using HTTP based embeddings
         # The first loop runs the embeddings, it benefits when using OpenAI embeddings
-        for i in range(0, len(texts), embedding_chunk_size):
-            chunk_texts = texts[i : i + embedding_chunk_size]
-            chunk_ids = ids[i : i + embedding_chunk_size]
-            chunk_metadatas = metadatas[i : i + embedding_chunk_size]
-            embeddings = self.embeddings.embed_documents(chunk_texts)
-            vectors = [
-                Vector(id=chunk_id, sparse_values=value, metadata=metadata)
-                for (chunk_id, value, metadata) in zip(
-                    chunk_ids, embeddings, chunk_metadatas
-                )
-            ]
-            if async_req:
-                # Runs the pinecone upsert asynchronously.
-                async_res = [
+        with _document_schema_write_guard():
+            for i in range(0, len(texts), embedding_chunk_size):
+                chunk_texts = texts[i : i + embedding_chunk_size]
+                chunk_ids = ids[i : i + embedding_chunk_size]
+                chunk_metadatas = metadatas[i : i + embedding_chunk_size]
+                embeddings = self.embeddings.embed_documents(chunk_texts)
+                vectors = [
+                    Vector(id=chunk_id, sparse_values=value, metadata=metadata)
+                    for (chunk_id, value, metadata) in zip(
+                        chunk_ids, embeddings, chunk_metadatas
+                    )
+                ]
+                if async_req:
+                    # Runs the pinecone upsert asynchronously.
+                    async_res = [
+                        self.index.upsert(
+                            vectors=batch_vector,
+                            namespace=namespace,
+                            async_req=async_req,
+                            **kwargs,
+                        )
+                        for batch_vector in batch_iterate(batch_size, vectors)
+                    ]
+                    [res.get() for res in async_res]
+                else:
                     self.index.upsert(
-                        vectors=batch_vector,
+                        vectors=vectors,
                         namespace=namespace,
-                        async_req=async_req,
+                        batch_size=batch_size,
                         **kwargs,
                     )
-                    for batch_vector in batch_iterate(batch_size, vectors)
-                ]
-                [res.get() for res in async_res]
-            else:
-                self.index.upsert(
-                    vectors=vectors,
-                    namespace=namespace,
-                    batch_size=batch_size,
-                    **kwargs,
-                )
         return ids
 
-    async def aadd_texts(
-        self,
+    async def aadd_texts(        self,
         texts: Iterable[str],
         metadatas: Optional[List[dict]] = None,
         ids: Optional[List[str]] = None,
@@ -316,37 +318,37 @@ class PineconeSparseVectorStore(PineconeVectorStore):
             metadata[self._text_key] = text
 
         # Manage _IndexAsyncio HTTP client lifespan
-        async with self._async_index_context() as idx:
-            # For loops to avoid memory issues and optimize when using HTTP based embeddings
-            for i in range(0, len(texts), embedding_chunk_size):
-                chunk_texts = texts[i : i + embedding_chunk_size]
-                chunk_ids = ids[i : i + embedding_chunk_size]
-                chunk_metadatas = metadatas[i : i + embedding_chunk_size]
-                embeddings = await self.embeddings.aembed_documents(chunk_texts)
-                vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+        with _document_schema_write_guard():
+            async with self._async_index_context() as idx:
+                # For loops to avoid memory issues and optimize when using HTTP based embeddings
+                for i in range(0, len(texts), embedding_chunk_size):
+                    chunk_texts = texts[i : i + embedding_chunk_size]
+                    chunk_ids = ids[i : i + embedding_chunk_size]
+                    chunk_metadatas = metadatas[i : i + embedding_chunk_size]
+                    embeddings = await self.embeddings.aembed_documents(chunk_texts)
+                    vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
 
-                # Split into batches and upsert asynchronously
-                tasks = []
-                for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
-                    task = idx.upsert(
-                        vectors=[
-                            Vector(
-                                id=chunk_id,
-                                sparse_values=sparse_values,
-                                metadata=metadata,
-                            )
-                            for chunk_id, sparse_values, metadata in batch_vector_tuples
-                        ],
-                        namespace=namespace,
-                        **kwargs,
-                    )
-                    tasks.append(task)
+                    # Split into batches and upsert asynchronously
+                    tasks = []
+                    for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
+                        task = idx.upsert(
+                            vectors=[
+                                Vector(
+                                    id=chunk_id,
+                                    sparse_values=sparse_values,
+                                    metadata=metadata,
+                                )
+                                for chunk_id, sparse_values, metadata in batch_vector_tuples
+                            ],
+                            namespace=namespace,
+                            **kwargs,
+                        )
+                        tasks.append(task)
 
-                # Wait for all upserts to complete
-                await asyncio.gather(*tasks)
+                    # Wait for all upserts to complete
+                    await asyncio.gather(*tasks)
 
         return ids
-
     def similarity_search_with_score(
         self,
         query: str,
