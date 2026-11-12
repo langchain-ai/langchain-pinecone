@@ -4,18 +4,17 @@ import asyncio
 import logging
 import os
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from types import TracebackType
 from typing import (
-    TYPE_CHECKING,
-    Any,
+    TYPE_CHECKING,    Any,
     AsyncIterator,
     Callable,
     Iterable,
+    Iterator,
     List,
     Optional,
-    Tuple,
-    TypeVar,
+    Tuple,    TypeVar,
 )
 
 import numpy as np
@@ -46,10 +45,37 @@ logger = logging.getLogger(__name__)
 
 VST = TypeVar("VST", bound=VectorStore)
 
+_DOCUMENT_SCHEMA_ERROR_MARKERS = ("document schema", "documents api")
+
+_DOCUMENT_SCHEMA_WRITE_ERROR_MESSAGE = (
+    "This Pinecone index has a document schema, so Pinecone only accepts writes "
+    "through its documents API, which langchain-pinecone does not support yet. "
+    "langchain-pinecone writes through the vectors API, which requires an index "
+    "whose schema exposes a dense field named `_values` (plus `_sparse_values` "
+    "for sparse vectors). Create a compatible index, for example with "
+    "`pc.create_index(name=..., dimension=..., metric=..., "
+    "spec=ServerlessSpec(cloud=..., region=...))`, or with an explicit schema "
+    "that names its dense field `_values`, and point the vector store at it."
+)
+
+
+def _is_document_schema_write_error(error: BaseException) -> bool:
+    message = str(error).lower()
+    return all(marker in message for marker in _DOCUMENT_SCHEMA_ERROR_MARKERS)
+
+
+@contextmanager
+def _document_schema_write_guard() -> Iterator[None]:
+    try:
+        yield
+    except Exception as error:
+        if _is_document_schema_write_error(error):
+            raise ValueError(_DOCUMENT_SCHEMA_WRITE_ERROR_MESSAGE) from error
+        raise
+
 
 class PineconeVectorStore(VectorStore):
     """Pinecone vector store integration.
-
     Setup:
         Install `langchain-pinecone` and set the environment variable `PINECONE_API_KEY`.
 
@@ -351,34 +377,36 @@ class PineconeVectorStore(VectorStore):
         # For loops to avoid memory issues and optimize when using HTTP based embeddings
         # The first loop runs the embeddings, it benefits when using OpenAI embeddings
         # The second loops runs the pinecone upsert asynchronously.
-        for i in range(0, len(texts), embedding_chunk_size):
-            chunk_texts = texts[i : i + embedding_chunk_size]
-            chunk_ids = ids[i : i + embedding_chunk_size]
-            chunk_metadatas = metadatas[i : i + embedding_chunk_size]
-            embeddings = self._embedding.embed_documents(chunk_texts)
-            vector_tuples = list(zip(chunk_ids, embeddings, chunk_metadatas))
-            if async_req:
-                # Runs the pinecone upsert asynchronously.
-                async_res = [
+        with _document_schema_write_guard():
+            for i in range(0, len(texts), embedding_chunk_size):
+                chunk_texts = texts[i : i + embedding_chunk_size]
+                chunk_ids = ids[i : i + embedding_chunk_size]
+                chunk_metadatas = metadatas[i : i + embedding_chunk_size]
+                embeddings = self._embedding.embed_documents(chunk_texts)
+                vector_tuples = list(zip(chunk_ids, embeddings, chunk_metadatas))
+                if async_req:
+                    # Runs the pinecone upsert asynchronously.
+                    async_res = [
+                        self.index.upsert(
+                            vectors=batch_vector_tuples,
+                            namespace=namespace,
+                            async_req=async_req,
+                            **kwargs,
+                        )
+                        for batch_vector_tuples in batch_iterate(
+                            batch_size, vector_tuples
+                        )
+                    ]
+                    [res.get() for res in async_res]
+                else:
                     self.index.upsert(
-                        vectors=batch_vector_tuples,
+                        vectors=vector_tuples,
                         namespace=namespace,
                         async_req=async_req,
                         **kwargs,
                     )
-                    for batch_vector_tuples in batch_iterate(batch_size, vector_tuples)
-                ]
-                [res.get() for res in async_res]
-            else:
-                self.index.upsert(
-                    vectors=vector_tuples,
-                    namespace=namespace,
-                    async_req=async_req,
-                    **kwargs,
-                )
 
         return ids
-
     async def aadd_texts(
         self,
         texts: Iterable[str],
@@ -424,30 +452,30 @@ class PineconeVectorStore(VectorStore):
             metadata[self._text_key] = text
 
         # Manage _IndexAsyncio HTTP client lifespan
-        async with self._async_index_context() as idx:
-            # For loops to avoid memory issues and optimize when using HTTP based embeddings
-            for i in range(0, len(texts), embedding_chunk_size):
-                chunk_texts = texts[i : i + embedding_chunk_size]
-                chunk_ids = ids[i : i + embedding_chunk_size]
-                chunk_metadatas = metadatas[i : i + embedding_chunk_size]
-                embeddings = await self._embedding.aembed_documents(chunk_texts)
-                vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
+        with _document_schema_write_guard():
+            async with self._async_index_context() as idx:
+                # For loops to avoid memory issues and optimize when using HTTP based embeddings
+                for i in range(0, len(texts), embedding_chunk_size):
+                    chunk_texts = texts[i : i + embedding_chunk_size]
+                    chunk_ids = ids[i : i + embedding_chunk_size]
+                    chunk_metadatas = metadatas[i : i + embedding_chunk_size]
+                    embeddings = await self._embedding.aembed_documents(chunk_texts)
+                    vector_tuples = zip(chunk_ids, embeddings, chunk_metadatas)
 
-                # Split into batches and upsert asynchronously
-                tasks = []
-                for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
-                    task = idx.upsert(
-                        vectors=batch_vector_tuples,
-                        namespace=namespace,
-                        **kwargs,
-                    )
-                    tasks.append(task)
+                    # Split into batches and upsert asynchronously
+                    tasks = []
+                    for batch_vector_tuples in batch_iterate(batch_size, vector_tuples):
+                        task = idx.upsert(
+                            vectors=batch_vector_tuples,
+                            namespace=namespace,
+                            **kwargs,
+                        )
+                        tasks.append(task)
 
-                # Wait for all upserts to complete
-                await asyncio.gather(*tasks)
+                    # Wait for all upserts to complete
+                    await asyncio.gather(*tasks)
 
         return ids
-
     async def __aenter__(self) -> PineconeVectorStore:
         if not self._async_index_context_open:
             idx = await self.async_index

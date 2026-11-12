@@ -4,6 +4,7 @@ from unittest.mock import ANY, Mock, call
 
 import pytest
 from pinecone import PineconeAsyncio, SparseValues  # type: ignore[import-untyped]
+from pinecone.exceptions import PineconeApiException  # type: ignore[import-untyped]
 from pytest_mock import AsyncMockType, MockerFixture, MockType
 
 from langchain_pinecone._utilities import DistanceStrategy
@@ -1290,3 +1291,135 @@ def test_similarity_score_threshold_retriever__honors_constructor_namespace(
     retriever.invoke("test query")
 
     assert mock_index.query.call_args.kwargs["namespace"] == "constructor-ns"
+
+
+_DOCUMENT_SCHEMA_BODY = (
+    '{"code":3,"message":"This index has a document schema, so writes must go '
+    "through the documents API. Use POST /namespaces/{namespace}/documents/upsert, "
+    "/update or /delete with the X-Pinecone-API-Version header set to 2026-07 or "
+    'later.","details":[]}'
+)
+
+
+def _document_schema_api_error() -> PineconeApiException:
+    error = PineconeApiException(status=400, reason="Bad Request")
+    error.body = _DOCUMENT_SCHEMA_BODY
+    return error
+
+
+def _assert_document_schema_error(error: BaseException) -> None:
+    assert isinstance(error, ValueError), f"unexpected error: {error!r}"
+    message = str(error)
+    assert "document schema" in message
+    assert "_values" in message
+    assert isinstance(error.__cause__, PineconeApiException)
+
+
+def test_add_texts_translates_document_schema_error(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """add_texts surfaces an actionable error for document-schema indexes."""
+    mock_index.upsert = mocker.Mock(side_effect=_document_schema_api_error())
+    vectorstore = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
+
+    with pytest.raises(Exception) as excinfo:
+        vectorstore.add_texts(["hello"], async_req=False)
+
+    _assert_document_schema_error(excinfo.value)
+
+
+def test_add_texts_translates_document_schema_error_with_async_req(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """The error raised while awaiting an ApplyResult is translated as well."""
+    apply_result = mocker.Mock()
+    apply_result.get = mocker.Mock(side_effect=_document_schema_api_error())
+    mock_index.upsert = mocker.Mock(return_value=apply_result)
+    vectorstore = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
+
+    with pytest.raises(Exception) as excinfo:
+        vectorstore.add_texts(["hello"], async_req=True)
+
+    _assert_document_schema_error(excinfo.value)
+
+
+def test_from_texts_translates_document_schema_error(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """The actionable error reaches callers of the from_texts entry point."""
+    mocker.patch.object(
+        PineconeVectorStore, "get_pinecone_index", return_value=mock_index
+    )
+    mock_index.upsert = mocker.Mock(side_effect=_document_schema_api_error())
+
+    with pytest.raises(Exception) as excinfo:
+        PineconeVectorStore.from_texts(
+            ["hello"], mock_embedding, index_name="schema-index", async_req=False
+        )
+
+    _assert_document_schema_error(excinfo.value)
+
+
+def test_add_texts_propagates_unrelated_api_errors(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """Errors unrelated to document schemas keep their original type."""
+    unrelated = PineconeApiException(status=400, reason="Bad Request")
+    unrelated.body = '{"code":3,"message":"Vector dimension 3 does not match"}'
+    mock_index.upsert = mocker.Mock(side_effect=unrelated)
+    vectorstore = PineconeVectorStore(
+        index=mock_index, embedding=mock_embedding, text_key="text"
+    )
+
+    with pytest.raises(PineconeApiException) as excinfo:
+        vectorstore.add_texts(["hello"], async_req=False)
+
+    assert excinfo.value is unrelated
+
+
+def test_sparse_add_texts_translates_document_schema_error(
+    mocker: MockerFixture,
+    mock_index: MockType,
+    mock_sparse_embedding: AsyncMockType,
+) -> None:
+    """The sparse store translates the document-schema error too."""
+    mock_index.upsert = mocker.Mock(side_effect=_document_schema_api_error())
+    vectorstore = PineconeSparseVectorStore(
+        index=mock_index, embedding=mock_sparse_embedding, text_key="text"
+    )
+
+    with pytest.raises(Exception) as excinfo:
+        vectorstore.add_texts(["hello"], async_req=False)
+
+    _assert_document_schema_error(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_aadd_texts_translates_document_schema_error(
+    mocker: MockerFixture,
+    mock_async_index: AsyncMockType,
+    mock_embedding: AsyncMockType,
+) -> None:
+    """aadd_texts translates the error and still closes the async index session once."""
+    mock_async_index.upsert = mocker.AsyncMock(side_effect=_document_schema_api_error())
+    vectorstore = PineconeVectorStore(
+        index=mock_async_index, embedding=mock_embedding, text_key="text"
+    )
+
+    with pytest.raises(Exception) as excinfo:
+        await vectorstore.aadd_texts(["hello"])
+
+    _assert_document_schema_error(excinfo.value)
+    mock_async_index.__aexit__.assert_called_once()
